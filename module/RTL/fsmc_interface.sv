@@ -174,7 +174,7 @@
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,   // 地址/数据总线位宽（根据硬件连接调整）
     parameter DATA_WIDTH = 16,   // 数据位宽（固定16位模式）
-    parameter CS_WIDTH   = 3     // 片选地址位宽（AD[3:0]）
+    parameter CS_WIDTH   = 2     // 片选地址位宽（AD[3:0]）
 )(
     // ================= 物理接口 =================
     inout  [ADDR_WIDTH-1:0] AD, // 复用地址/数据总线
@@ -190,19 +190,12 @@ module fsmc_interface #(
     output logic [DATA_WIDTH-1:0] rd_data,  // 捕获的单片机读数据
     input  logic [DATA_WIDTH-1:0] wr_data, // 待模块写入的数据（需提前准备）
     output logic         state,   // 读写使能状态：高电平表示读，低电平表示写
-    output logic [CS_WIDTH-1:0] cs    // 片选信号来自地址低位
+    output logic [2**CS_WIDTH-1:0] cs    // 片选信号来自地址低位
 );
-
-    // -----将AD设置为三态输出------
-    logic ad_dir;
-    reg [ADDR_WIDTH-1:0] ad_out;
-    wire [ADDR_WIDTH-1:0] ad_in;
-    assign ad_in = AD;
-    assign AD = ad_dir ? ad_out : 18'bz;
 
 // =============================================================================
 // 信号同步模块（消除亚稳态）
-// 说明：三级同步链用于异步信号输入，确保满足建立保持时间
+// 说明：一级同步链用于异步信号输入，确保满足建立保持时间
 // =============================================================================
 logic [2:0] sync_chain; // [NADV, NWE, NOE]
 always_ff @(posedge clk or negedge reset_n) begin
@@ -221,133 +214,113 @@ assign {synced_nadv, synced_nwe, synced_noe} = sync_chain;
 // 边沿检测模块（基于同步后信号）
 // 说明：使用状态寄存器法检测有效边沿，避免组合逻辑毛刺
 // =============================================================================
-logic prev_nadv, prev_noe; // 历史状态寄存器
+logic prev_nadv, prev_noe, prev_nwe; // 历史状态寄存器
 
 always_ff @(posedge clk) begin
     prev_nadv <= synced_nadv;  // 保存NADV前一周期状态
+    prev_nwe  <= synced_nwe;
     prev_noe  <= synced_noe;   // 保存NOE前一周期状态
 end
 
 // 边沿检测逻辑（Quartus综合器能识别此模式生成边沿检测电路）
-wire nadv_falling = (prev_nadv && !synced_nadv); // NADV下降沿
+wire nadv_rising  = (!prev_nadv && synced_nadv); // NADV上升沿
 wire noe_rising   = (!prev_noe && synced_noe);   // NOE上升沿
-wire noe_falling  = (prev_noe && !synced_noe);   // NOE下降沿
+wire nwe_rising   = (!prev_nwe && synced_nwe);   // NWE上升沿
 
-// =============================================================================
-// 主状态机（控制总线事务流程）
-// 状态定义：
-//   IDLE       : 等待总线事务开始
-//   ADDR_PHASE : 地址捕获阶段（NADV有效）
-//   DATA_SETUP : 数据建立阶段（等待NOE/NWE变化）
-//   DATA_HOLD  : 数据保持阶段（执行读/写操作）
-// =============================================================================
-typedef enum logic [1:0] { // Quartus支持枚举类型综合
-    IDLE,
-    ADDR_PHASE,
-    DATA_SETUP,
-    DATA_HOLD
-} fsmc_state_t;
 
-fsmc_state_t curr_state, next_state;
-logic is_addr_latched;    // 判断地址是否已经锁存
-
-// 状态转移逻辑（组合逻辑）
-always_comb begin
-    next_state = curr_state; // 默认保持当前状态
-    case(curr_state)
-        IDLE: begin
-            // NADV下降沿表示地址相位开始
-            if(is_addr_latched) next_state = DATA_SETUP;
-            else next_state = IDLE;
-        end
-        
-        DATA_SETUP: begin
-            // 检测到读/写使能信号变化时进入数据保持阶段
-            // 也就是说noe下降沿或者nwe低电平
-            if(noe_falling || !synced_nwe) 
-                next_state = DATA_HOLD;
-            else
-                next_state = DATA_SETUP;
-        end
-        
-        // 地址保持需要坚持一段时间
-        DATA_HOLD: begin
-            // 读操作：NOE上升沿结束事务
-            // 写操作：NWE上升沿结束事务
-            if(noe_rising || synced_nwe)
-                next_state = IDLE;
-            else
-                next_state = DATA_HOLD;
-        end
-    endcase
-end
-
-// 状态寄存器（时序逻辑）
-always_ff @(posedge clk or negedge reset_n) begin
-    if(!reset_n) begin
-        curr_state <= IDLE;
-    end else begin
-        curr_state <= next_state;
-    end
-end
 
 // =============================================================================
 // 地址/数据捕获逻辑
 // 说明：
-//   - 地址在ADDR_PHASE阶段锁存，等地址建立结束就进入数据建立状态，那么此刻地址被锁存起来
-//   - 写数据在DATA_SETUP阶段锁存
+//   - 在NADV的上升沿阶段，赶紧把地址锁存起来用于后续地址解码，此时根据nwe决定是读还是写
 // =============================================================================
-wire command_type = !NADV[ADDR_WIDTH-1] && NADV[ADDR_WIDTH-1]; // 只有地址的最高两位为0x01时，FPGA才处于命令状态
-logic [CS_WIDTH-1]cs_pre;// 先保存CS的状态
+logic is_addr_latched;    // 判断地址是否已经锁存
+logic is_read_done;// 读时序完成
+logic is_write_done;// 写时序完成
+
+wire command_type = (AD[ADDR_WIDTH-1:ADDR_WIDTH-2] == 2'b01); 
+logic [CS_WIDTH-1:0]cs_pre;// 先保存CS的状态
 // 地址锁存（在确定最高片选后，从低位地址提取片选信号，并确定读写状态）
 always_ff @(posedge clk) begin
     if(nadv_rising && command_type) begin
-        cs_pre   <= 1 << AD[CS_WIDTH-1:0];      // 根据低位地址来提取片选信号
+        cs_pre   <=  AD[CS_WIDTH-1:0];      
         state <= synced_nwe;                // 确定读写状态
         is_addr_latched <= 1;
-    end else begin
+    end else if(is_read_done||is_write_done) begin
         is_addr_latched <= 0;
     end
 end
 
-// 片选判断
-always_ff @(posedge clk) begin
-    // 数据建立过程中，已经判断出地址正常
-    if(curr_state == DATA_HOLD)cs <= cs_pre;
-end
 
 
-// 读时序数据锁存（在DATA_SETUP阶段捕获）
+// =============================================================================
+// 读时序——数据捕获
+// 说明：
+//   - 在地址成功解码后,且为读时序（state为高电平），那么就捕获数据
+// =============================================================================
 always_ff @(posedge clk) begin
-    if(curr_state == DATA_SETUP && !synced_nwe) begin
-        rd_data <= AD[DATA_WIDTH-1:0]; // 仅捕获数据位
+    if(is_addr_latched && state && noe_rising) begin
+        // 进入读时序
+        rd_data <= AD[DATA_WIDTH-1:0]; // 在noe上升沿期间捕获数据位
+        is_read_done <= 1'b1;
+    end else begin
+        is_read_done <= 1'b0;
     end
 end
 
-// =============================================================================
-// 控制信号生成
-// 说明：
-//   - rd_en: 在DATA_HOLD阶段且NOE有效时生成读使能
-// =============================================================================
-always_comb begin
-    rd_en = (curr_state == DATA_HOLD) && !synced_noe;
-end
+    
 
 // =============================================================================
-// 三态总线控制
-// 说明：
-//   - 读操作期间使能总线输出
-//   - 使用寄存器输出确保时序稳定
+// 写时序——写入数据
+// 时序说明：
+// 1. 在地址锁存后立即使能输出
+// 2. 在NWE上升沿后保持若干个周期关闭
 // =============================================================================
-logic tri_ctrl; // 三态控制寄存器
-
+logic [1:0] tri_delay; // 新增延时计数器
+logic is_delay_ready;// 是否准备延迟
 always_ff @(posedge clk) begin
-    // 提前一个周期准备读数据
-    tri_ctrl <= (next_state == DATA_HOLD) && rd_en;
+    if (!reset_n) begin
+        tri_ctrl <= 0;
+        tri_delay <= 0;
+        is_delay_ready <= 0;
+    end else begin
+        // 优先处理使能逻辑
+        if (is_addr_latched && !state) begin
+            tri_ctrl <= 1;
+            tri_delay <= 2'b11;
+        end
+        
+        // 处理NWE上升沿触发延迟准备
+        if (nwe_rising) 
+            is_delay_ready <= 1;
+        else 
+            is_delay_ready <= 0;
+        
+        // 处理延迟计数
+        if (is_delay_ready) begin
+            if (tri_delay == 0) begin
+                tri_ctrl <= 0;
+            end else begin
+                tri_delay <= tri_delay - 1;
+            end
+        end
+    end
 end
+
+assign is_write_done = (tri_delay == 0) && !tri_ctrl;// 供前面的地址锁存+解码用于结束判断，避免死锁
 
 // 写时序，把 wr_data 赋值给 AD
 assign AD = tri_ctrl ? wr_data : {ADDR_WIDTH{1'bz}};
+
+
+
+// 片选判断
+always_ff @(posedge clk) begin
+    // 数据建立过程中，已经判断出地址正常
+    // 片选对于读是个短脉冲，对于写是个长脉冲
+    if(is_read_done || is_write_done) cs <= 1 << cs_pre;
+    else cs <= 0;
+end
 
 
 endmodule
