@@ -19,6 +19,7 @@ module fsmc_interface_tb;
 
 
     logic [3:0]cs;
+    logic state;
 
     // 定义线
     logic ad_dir;
@@ -31,10 +32,7 @@ module fsmc_interface_tb;
     assign ad = ad_dir ?ad_out : 18'bz;
 
     // **************用于测试*****************
-`ifdef DEBUG
-    logic [3:0] debug_state; // 用于显示状态
-    // logic [2:0] debug_next_state;
-`endif
+
 
     // 被测模块实例化
     fsmc_interface uut (
@@ -43,15 +41,11 @@ module fsmc_interface_tb;
     .NOE(noe),
     .NWE(nwe),
     .AD(ad),
-    .module_in(module_in),
-    .module_out(module_out),
+    .rd_data(module_in),
+    .wr_data(module_out),
     .cs(cs),
-    .reset(reset)
-
-    // // 用于测试
-`ifdef DEBUG
-    ,.debug_state(debug_state)
-`endif 
+    .state(state),
+    .reset_n(reset)
     );
 
     integer count;
@@ -101,7 +95,7 @@ module fsmc_interface_tb;
         // 拉低地址片选
         nadv =0;
         ad_dir =1;//开始写
-        ad_out = 18'h080000;// 写入地址
+        ad_out = 18'b01_0000_0000;// 写入地址
         #5;
         
 
@@ -113,7 +107,7 @@ module fsmc_interface_tb;
         // 地址保持时间
         #1;
         ad_dir =0;
-        #3;
+        #2;
 
 
 
@@ -128,10 +122,9 @@ module fsmc_interface_tb;
         // 保持时间
         #3;
         ad_dir =0;
-
+        $display("---------->[data]:%h",module_in);
         #8;
-
-       
+ 
     end
     endtask
 
@@ -142,7 +135,7 @@ module fsmc_interface_tb;
         // ----------写地址------------
         nadv =0;// 先拉低地址片选
         ad_dir =1;//开始写
-        ad_out = 18'h0001;// 写入地址
+        ad_out = 18'b01_0000_0001;// 写入地址
         #6;
         
         // 拉高地址片选
@@ -160,6 +153,7 @@ module fsmc_interface_tb;
         #8;
 
         noe =1;
+        #1;
         $display("---------->[data]:%h",ad_in);
 
         // ----------读取结束-----------
