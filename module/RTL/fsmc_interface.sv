@@ -365,11 +365,13 @@ reg [ADDR_WIDTH-1:0] addr_latched;
 reg prev_nadv, prev_nwe, prev_noe;
 reg [DATA_HOLD_CYCLES-1:0] hold_counter;
 reg output_enable;
+reg prev_output_enable;  // 新增输出使能状态寄存器
 
 // 边沿检测
 wire nadv_rising  = ~prev_nadv & NADV;
 wire nwe_rising   = ~prev_nwe  & NWE;
 wire noe_rising   = ~prev_noe  & NOE;
+wire output_enable_falling = prev_output_enable & ~output_enable;  // 新增下降沿检测
 
 // 地址锁存与状态控制
 always @(posedge clk or negedge reset_n) begin
@@ -396,6 +398,11 @@ always @(posedge clk or negedge reset_n) begin
         // 写操作清除片选
         else if (~state && nwe_rising)
             cs <= 0;
+
+        // 读操作清除片选
+        else if (state && output_enable_falling)
+            cs <= 0;
+
     end
 end
 
@@ -423,8 +430,10 @@ always @(posedge clk or negedge reset_n) begin
         prev_noe <= 1'b1;
         output_enable <= 0;
         hold_counter <= 0;
+        prev_output_enable <= 0;  // 初始化新增寄存器
     end else begin
         prev_noe <= NOE;
+        prev_output_enable <= output_enable;  // 同步输出使能状态
         
         if (state) begin  // 读操作
             if (noe_rising) begin
