@@ -384,12 +384,12 @@ always @(posedge clk or negedge reset_n) begin
         // 地址捕获
         if (nadv_rising) begin
             addr_latched <= AD;
-            state <= NWE;  // 锁存NWE状态
             
             // 片选生成
-            if (AD[ADDR_WIDTH-1 -:16] == 16'h4000)
+            if (AD[ADDR_WIDTH-1 -:16] == 16'b0100_0000)begin
+                state <= NWE;  // 锁存NWE状态
                 cs <= (1 << AD[CS_WIDTH-1:0]);
-            else
+            end else
                 cs <= 0;
         end
         
@@ -399,7 +399,11 @@ always @(posedge clk or negedge reset_n) begin
     end
 end
 
+// =============================================================================
 // 写数据捕获
+// 时序说明：
+//  -不需要管地址是否符合，因为不片选，那么这个数据就不会被模块使用
+// =============================================================================
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
         rd_data <= 0;
@@ -408,7 +412,12 @@ always @(posedge clk or negedge reset_n) begin
     end
 end
 
+// =============================================================================
 // 读数据控制
+// 时序说明：
+//  -需要在乎地址是否正确
+//  -由于正确情况下读操作的state正好为高电平，其他情况均为低电平，所以这个可以作为控制信号
+// =============================================================================
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
         prev_noe <= 1'b1;
@@ -437,9 +446,7 @@ always @(posedge clk or negedge reset_n) begin
 end
 
 // 总线驱动
-assign AD = output_enable ? 
-    {{(ADDR_WIDTH-DATA_WIDTH){1'b0}}, wr_data} : 
-    {ADDR_WIDTH{1'bz}};
+assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'b0}}, wr_data} : {ADDR_WIDTH{1'bz}};
 
 // 写使能同步
 always @(posedge clk) prev_nwe <= NWE;

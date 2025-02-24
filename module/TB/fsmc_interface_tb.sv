@@ -95,7 +95,7 @@ module fsmc_interface_tb;
         // 拉低地址片选
         nadv =0;
         ad_dir =1;//开始写
-        ad_out = 18'b01_0000_0000;// 写入地址
+        ad_out = 18'b01_0000_0001;// 写入地址
         #5;
         
 
