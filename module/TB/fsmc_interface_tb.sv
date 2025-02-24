@@ -67,6 +67,7 @@ module fsmc_interface_tb;
         nwe = 1'b1;
         noe = 1'b1;
         ad_dir =0;
+        module_out = 0;
         #2;
 
         // 释放复位
