@@ -32,21 +32,48 @@ reg [DATA_HOLD_CYCLES-1:0] hold_counter;
 reg output_enable;
 reg prev_output_enable;  // 新增输出使能状态寄存器
 
+// ===============一级同步链=============
+logic [2:0] sync_chain; // [NADV, NWE, NOE]
+always_ff @(posedge clk or negedge reset_n) begin
+    if(!reset_n) begin
+        sync_chain <= 3'b111;  // 初始化为无效状态（对应信号高电平）
+    end else begin
+        sync_chain <= {NADV, NWE, NOE}; // 位拼接顺序：NADV在最高位
+    end
+end
+
+// 解包同步后信号
+logic synced_nadv, synced_nwe, synced_noe;
+assign {synced_nadv, synced_nwe, synced_noe} = sync_chain;
+
+// ==================延迟===================
+always_ff @(posedge clk or negedge reset_n) begin
+    if (!reset_n) begin
+        prev_nadv <= 1'b1;
+        prev_nwe <= 1'b1;
+        prev_noe <= 1'b1;
+    end else begin
+        prev_nadv <= synced_nadv;
+        prev_nwe <= synced_nwe;
+        prev_noe <= synced_noe;
+    end
+end
+
+
+
 // 边沿检测
-wire nadv_rising  = ~prev_nadv & NADV;
-wire nwe_rising   = ~prev_nwe  & NWE;
-wire noe_rising   = ~prev_noe  & NOE;
+wire nadv_rising  = ~prev_nadv & synced_nadv;
+wire nwe_rising   = ~prev_nwe  & synced_nwe;
+wire noe_rising   = ~prev_noe  & synced_noe;
 wire output_enable_falling = prev_output_enable & ~output_enable;  // 新增下降沿检测
 
 // 地址锁存与状态控制
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
-        prev_nadv <= 1'b1;
         state <= 1'b0;
         cs <= 0;
         rd_data <= 0;
     end else begin
-        prev_nadv <= NADV;
         
         // 地址捕获
         if (nadv_rising) begin
@@ -86,13 +113,11 @@ end
 logic noe_triggered;
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
-        prev_noe <= 1'b1;
         output_enable <= 0;
         hold_counter <= 0;
         prev_output_enable <= 0;  // 初始化新增寄存器
         noe_triggered  <= 0;  // 新增触发标志
     end else begin
-        prev_noe <= NOE;
         prev_output_enable <= output_enable;  // 同步输出使能状态
         
         if (state) begin  // 读操作
@@ -129,8 +154,5 @@ end
 
 // 总线驱动
 assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'b0}}, wr_data} : {ADDR_WIDTH{1'bz}};
-
-// 写使能同步
-always @(posedge clk) prev_nwe <= NWE;
 
 endmodule
