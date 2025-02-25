@@ -28,7 +28,7 @@ module fsmc_interface #(
 );
 
 // 信号声明
-reg prev_nadv, prev_nwe, prev_noe;
+
 reg [DATA_HOLD_CYCLES-1:0] hold_counter;
 reg output_enable;
 reg prev_output_enable;  // 新增输出使能状态寄存器
@@ -51,18 +51,12 @@ end
 // 解包同步后信号
 logic synced_nadv, synced_nwe, synced_noe;
 assign {synced_nadv, synced_nwe, synced_noe} = sync_chain;
-
+reg prev_nadv, prev_nwe, prev_noe;
 // ==================延迟===================
-always_ff @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin
-        prev_nadv <= 1'b1;
-        prev_nwe <= 1'b1;
-        prev_noe <= 1'b1;
-    end else begin
-        prev_nadv <= synced_nadv;
-        prev_nwe <= synced_nwe;
-        prev_noe <= synced_noe;
-    end
+always_ff @(posedge clk) begin
+    prev_nadv <= synced_nadv;
+    prev_nwe <= synced_nwe;
+    prev_noe <= synced_noe;
 end
 
 
@@ -83,7 +77,7 @@ always @(posedge clk or negedge reset_n) begin
         
         // 地址捕获
         if (nadv_rising) begin
-            rd_data <= AD[DATA_WIDTH:0];
+            rd_data <= AD[DATA_WIDTH-1:0];
             
             // 片选生成
             if (AD[ADDR_WIDTH-1 -:HIGH_ADDR_WIDTH] == HIGH_ADDR_CS)begin
@@ -158,6 +152,6 @@ always @(posedge clk or negedge reset_n) begin
 end
 
 // 总线驱动
-assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'b0}}, wr_data} : {ADDR_WIDTH{1'bz}};
+assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'bz}}, wr_data} : {ADDR_WIDTH{1'bz}};
 
 endmodule
