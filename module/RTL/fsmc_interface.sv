@@ -22,7 +22,7 @@ module fsmc_interface #(
     // ================= 用户接口 =================
     output logic [DATA_WIDTH-1:0] rd_data,
     input  logic [DATA_WIDTH-1:0] wr_data,
-    output logic         state,       // 1:读 0:写
+    output logic         state,       // 1:读 0:写。对于独立模块来说是相反的
     output logic [2**CS_WIDTH-1:0] cs
 );
 

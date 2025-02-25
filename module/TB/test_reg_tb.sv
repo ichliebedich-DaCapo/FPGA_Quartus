@@ -60,7 +60,7 @@ initial begin
     $display("=== Test Case 1: Basic Read/Write ===");
     // 先读
     en = 1'b1;
-    state = 1'b1;
+    state = 1'b0;
     #5;
     // 下降沿处输入数据
     en = 1'b0;
@@ -69,7 +69,7 @@ initial begin
 
     // 再写
     en = 1'b1;
-    state = 1'b0;
+    state = 1'b1;
     #7;
     en = 1'b0;
 
