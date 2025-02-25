@@ -8,13 +8,14 @@ module test(
     // ================= 系统接口 =================
     input         clk,                // 主时钟
     input         reset_n            // 异步复位
+
 );
 
     // ================= 用户接口 =================
     logic [15:0] rd_data;
     logic [15:0] wr_data;
     logic          state;       // 1:读 0:写
-    logic [1:0]       cs;
+    logic [3:0]       cs;
 
     fsmc_interface fsmc(
         .AD(AD),

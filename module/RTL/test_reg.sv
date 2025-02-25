@@ -38,7 +38,7 @@ always @(posedge clk or negedge reset_n) begin
 end
 
 // 写数据输出控制（组合逻辑直接输出）
-assign wr_data = (~state & en) ? stored_data : {DATA_WIDTH{1'b0}};
+assign wr_data = (~state & en) ? stored_data : {DATA_WIDTH{1'b1}};
 
 
 endmodule

@@ -102,7 +102,7 @@ begin
     // ----------写地址------------
     nadv =0;// 先拉低地址片选
     ad_dir =1;//开始写
-    ad_out = 18'b01_0000_0001;// 写入地址
+    ad_out = 18'b01_0000_0000;// 写入地址
     #6;
     
     // 拉高地址片选
@@ -123,5 +123,12 @@ begin
 
 end
 endtask
+
+
+// ==============================监测内部变量===============================
+initial begin
+    // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
+    $monitor("cs=%b rd_data=%h Data=%h at %t", uut.cs, uut.rd_data,uut.test_reg.stored_data,$time);
+end
 
 endmodule
