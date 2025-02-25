@@ -22,12 +22,11 @@ module fsmc_interface #(
     // ================= 用户接口 =================
     output logic [DATA_WIDTH-1:0] rd_data,
     input  logic [DATA_WIDTH-1:0] wr_data,
-    output logic         state,       // 1:读 0:写。对于独立模块来说是相反的
+    output logic        state,       // 1:读 0:写。对于独立模块来说是相反的
     output logic [2**CS_WIDTH-1:0] cs
 );
 
 // 信号声明
-reg [ADDR_WIDTH-1:0] addr_latched;
 reg prev_nadv, prev_nwe, prev_noe;
 reg [DATA_HOLD_CYCLES-1:0] hold_counter;
 reg output_enable;
@@ -43,15 +42,15 @@ wire output_enable_falling = prev_output_enable & ~output_enable;  // 新增下�
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
         prev_nadv <= 1'b1;
-        addr_latched <= 0;
         state <= 1'b0;
         cs <= 0;
+        rd_data <= 0;
     end else begin
         prev_nadv <= NADV;
         
         // 地址捕获
         if (nadv_rising) begin
-            addr_latched <= AD;
+            rd_data <= AD[DATA_WIDTH:0];
             
             // 片选生成
             if (AD[ADDR_WIDTH-1 -:16] == HIGH_ADDR_CS)begin
@@ -61,9 +60,14 @@ always @(posedge clk or negedge reset_n) begin
                 cs <= 0;
         end
         
-        // 写操作清除片选
-        else if (~state && nwe_rising)
+        else if(~state && nwe_rising)begin
+        // ===================
+        // 写数据捕获
+        // ===================
+            rd_data <= AD[DATA_WIDTH-1:0];
+            // 写操作清除片选
             cs <= 0;
+        end  
 
         // 读操作清除片选
         else if (state && output_enable_falling)
@@ -72,18 +76,6 @@ always @(posedge clk or negedge reset_n) begin
     end
 end
 
-// =============================================================================
-// 写数据捕获
-// 时序说明：
-//  -不需要管地址是否符合，因为不片选，那么这个数据就不会被模块使用
-// =============================================================================
-always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin
-        rd_data <= 0;
-    end else if (~state && nwe_rising) begin
-        rd_data <= AD[DATA_WIDTH-1:0];
-    end
-end
 
 // =============================================================================
 // 读数据控制

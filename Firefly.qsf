@@ -75,4 +75,27 @@ set_global_assignment -name EDA_TEST_BENCH_NAME tb_test -section_id eda_simulati
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id tb_test
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_test -section_id tb_test
 set_global_assignment -name EDA_TEST_BENCH_FILE program/test/tb_test.sv -section_id tb_test
+set_location_assignment PIN_28 -to AD[17]
+set_location_assignment PIN_30 -to AD[16]
+set_location_assignment PIN_59 -to AD[15]
+set_location_assignment PIN_58 -to AD[14]
+set_location_assignment PIN_55 -to AD[13]
+set_location_assignment PIN_54 -to AD[12]
+set_location_assignment PIN_53 -to AD[11]
+set_location_assignment PIN_52 -to AD[10]
+set_location_assignment PIN_51 -to AD[9]
+set_location_assignment PIN_50 -to AD[8]
+set_location_assignment PIN_49 -to AD[7]
+set_location_assignment PIN_46 -to AD[6]
+set_location_assignment PIN_44 -to AD[5]
+set_location_assignment PIN_43 -to AD[4]
+set_location_assignment PIN_42 -to AD[3]
+set_location_assignment PIN_39 -to AD[2]
+set_location_assignment PIN_38 -to AD[1]
+set_location_assignment PIN_34 -to AD[0]
+set_location_assignment PIN_33 -to NADV
+set_location_assignment PIN_31 -to NOE
+set_location_assignment PIN_32 -to NWE
+set_location_assignment PIN_65 -to reset_n
+set_location_assignment PIN_24 -to clk
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
