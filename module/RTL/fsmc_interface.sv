@@ -5,7 +5,7 @@
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
     parameter DATA_WIDTH = 16,              // 数据位宽
-    parameter CS_WIDTH   = 2,               // 片选地址位宽
+    parameter CS_WIDTH   = 2,               // 低位片选地址位宽，是从高位地址片选往后数的，这里为A[15:14]
     parameter DATA_HOLD_CYCLES = 2,         // 数据保持周期
     parameter HIGH_ADDR_CS = 2'b01,         // 高位地址片选，这里默认指的是A[17:16]
     parameter HIGH_ADDR_WIDTH = 2           // 高位地址片选所占位数
@@ -33,7 +33,12 @@ reg [DATA_HOLD_CYCLES-1:0] hold_counter;
 reg output_enable;
 reg prev_output_enable;  // 新增输出使能状态寄存器
 
-// ===============一级同步链=============
+// ========================================================================
+// 一级同步链
+// 说明：
+//      - 不添加同步链，那么错误率高达 12%
+//      - 仅仅添加一级同步链，就可以在1万次快速传输的情况下，错误率达到 0%。
+// ========================================================================
 logic [2:0] sync_chain; // [NADV, NWE, NOE]
 always_ff @(posedge clk or negedge reset_n) begin
     if(!reset_n) begin
@@ -83,7 +88,7 @@ always @(posedge clk or negedge reset_n) begin
             // 片选生成
             if (AD[ADDR_WIDTH-1 -:HIGH_ADDR_WIDTH] == HIGH_ADDR_CS)begin
                 state <= NWE;  // 锁存NWE状态
-                cs <= (1 << AD[CS_WIDTH-1:0]);
+                cs <= (1 << AD[ADDR_WIDTH-1-HIGH_ADDR_WIDTH -:CS_WIDTH]);
             end 
         end
 
