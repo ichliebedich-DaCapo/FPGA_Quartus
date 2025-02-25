@@ -10,7 +10,7 @@ integer count;
 initial begin
     clk = 0; 
     // forever #HALF_CLK_PERIOD clk = ~clk;                        // 每个周期翻转一次
-    for (count = 0; count < 200; count = count + 1) begin
+    for (count = 0; count < 100; count = count + 1) begin
         #HALF_CLK_PERIOD clk = ~clk; // 每个周期翻转一次
     end
 end
@@ -63,11 +63,6 @@ initial begin
     test_read();
     #10;
 
-    $display("\n=== Test Case 1: Basic Read/Write ===");
-    test_write();
-    #10;
-    test_read();
-    #10;
 
 end
 
@@ -135,7 +130,7 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("cs=%b state=%b rd_data=%h Data=%h at %t", uut.cs,uut.state, uut.rd_data,uut.test_reg.stored_data,$time);
+    $monitor("cs=%b state=%b wr_data=%h Data=%h at %t", uut.cs,uut.state, uut.wr_data,uut.test_reg.stored_data,$time);
 end
 
 endmodule

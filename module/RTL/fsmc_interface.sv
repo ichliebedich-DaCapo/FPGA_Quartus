@@ -59,7 +59,7 @@ always @(posedge clk or negedge reset_n) begin
             end else
                 cs <= 0;
         end
-        
+
         else if(~state && nwe_rising)begin
         // ===================
         // 写数据捕获
@@ -83,12 +83,14 @@ end
 //  -需要在乎地址是否正确
 //  -由于正确情况下读操作的state正好为高电平，其他情况均为低电平，所以这个可以作为控制信号
 // =============================================================================
+logic noe_triggered;
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
         prev_noe <= 1'b1;
         output_enable <= 0;
         hold_counter <= 0;
         prev_output_enable <= 0;  // 初始化新增寄存器
+        noe_triggered  <= 0;  // 新增触发标志
     end else begin
         prev_noe <= NOE;
         prev_output_enable <= output_enable;  // 同步输出使能状态
@@ -96,18 +98,31 @@ always @(posedge clk or negedge reset_n) begin
         if (state) begin  // 读操作
             if (noe_rising) begin
                 hold_counter <= DATA_HOLD_CYCLES;
+                noe_triggered <= 1;         // 标记已触发
                 output_enable <= 1'b1;
             end 
-            else if (|hold_counter) begin
-                hold_counter <= hold_counter - 1;
+            else if (noe_triggered) begin
+                if (hold_counter > 0) begin
+                    hold_counter <= hold_counter - 1;
+                    output_enable <= 1'b1; // 保持使能
+                    // 计数器结束时关闭
+                    if (hold_counter == 1) begin
+                        output_enable <= 1'b0;
+                        noe_triggered <= 0; // 清除触发标记
+                    end
+                end else begin
+                    output_enable <= 1'b0; // 防止计数器异常
+                end
             end
-            
-            if (hold_counter == 1)
-                output_enable <= 1'b0;
+            // 计数器结束后关闭使能
+            else begin
+                if(~NOE) output_enable <= 1'b1;     // 确保初始使能
+            end
         end
         else begin
-            output_enable <= 1'b0;
             hold_counter <= 0;
+            hold_counter <= 0;
+            noe_triggered  <= 0;          // 复位触发标志
         end
     end
 end
