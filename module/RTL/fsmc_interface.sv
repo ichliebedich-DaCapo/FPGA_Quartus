@@ -7,7 +7,8 @@ module fsmc_interface #(
     parameter DATA_WIDTH = 16,              // 数据位宽
     parameter CS_WIDTH   = 2,               // 片选地址位宽
     parameter DATA_HOLD_CYCLES = 2,         // 数据保持周期
-    parameter HIGH_ADDR_CS = 16'b0100_0000  // 高位地址片选，也就是除去低位片选地址剩下的部分。
+    parameter HIGH_ADDR_CS = 2'b01,         // 高位地址片选，这里默认指的是A[17:16]
+    parameter HIGH_ADDR_WIDTH = 2           // 高位地址片选所占位数
 )(
     // ================= 物理接口 =================
     inout  [ADDR_WIDTH-1:0] AD,      // 复用地址/数据总线
@@ -80,11 +81,10 @@ always @(posedge clk or negedge reset_n) begin
             rd_data <= AD[DATA_WIDTH:0];
             
             // 片选生成
-            if (AD[ADDR_WIDTH-1 -:16] == HIGH_ADDR_CS)begin
+            if (AD[ADDR_WIDTH-1 -:HIGH_ADDR_WIDTH] == HIGH_ADDR_CS)begin
                 state <= NWE;  // 锁存NWE状态
                 cs <= (1 << AD[CS_WIDTH-1:0]);
-            end else
-                cs <= 0;
+            end 
         end
 
         else if(~state && nwe_rising)begin
