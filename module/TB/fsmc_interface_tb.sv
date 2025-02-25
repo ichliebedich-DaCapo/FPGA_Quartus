@@ -3,9 +3,7 @@
 
 module fsmc_interface_tb;
 
-    // 时钟周期定义
-    parameter                           CLK_PERIOD                = 1    ;  // 10ns时钟周期
-    parameter                           HALF_CLK_PERIOD           = 0.5;
+
 
     // 信号定义
     logic clk;                                              // 时钟信号
@@ -48,11 +46,13 @@ module fsmc_interface_tb;
     .reset_n(reset)
     );
 
+    // 时钟周期定义
+    parameter                           CLK_PERIOD                = 1    ;  // 10ns时钟周期
+    parameter                           HALF_CLK_PERIOD           = 0.5;
     integer count;
     // 时钟生成
     initial begin
-        clk = 0;
-        
+        clk = 0; 
         // forever #HALF_CLK_PERIOD clk = ~clk;                        // 每个周期翻转一次
         for (count = 0; count < 100; count = count + 1) begin
             #HALF_CLK_PERIOD clk = ~clk; // 每个周期翻转一次
