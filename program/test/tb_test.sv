@@ -1,18 +1,33 @@
-// `define DEBUG
+`timescale 1ns/1ps  // 时间单位=1ns，时间精度=1ps   锁相环模块添加这个，所以这里也必须添加
 module tb_test;
 
 // =========================================时钟周期定义======================================
 parameter                           CLK_PERIOD                = 1    ;  // 10ns时钟周期
 parameter                           HALF_CLK_PERIOD           = 0.5;
 logic clk;
-integer count;
-// 时钟生成
+// integer count;
+// // 时钟生成
+// initial begin
+//     clk = 0; 
+//     // forever #HALF_CLK_PERIOD clk = ~clk;                        // 每个周期翻转一次
+//     for (count = 0; count < 100; count = count + 1) begin
+//         #HALF_CLK_PERIOD clk = ~clk; // 每个周期翻转一次
+//     end
+// end
+logic finsh;
 initial begin
     clk = 0; 
-    // forever #HALF_CLK_PERIOD clk = ~clk;                        // 每个周期翻转一次
-    for (count = 0; count < 100; count = count + 1) begin
-        #HALF_CLK_PERIOD clk = ~clk; // 每个周期翻转一次
-    end
+    finsh = 0;
+    fork
+        begin : loop_block
+            forever begin
+                #HALF_CLK_PERIOD clk = ~clk; // 每个周期翻转一次
+                if (finsh == 1'b1) begin
+                    disable loop_block; // 使用 disable 退出
+                end
+            end
+        end
+    join
 end
 // =========================================时钟周期定义======================================
 
@@ -64,6 +79,7 @@ initial begin
     #10;
 
 
+    finsh = 1'b1;
 end
 
   

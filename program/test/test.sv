@@ -11,19 +11,38 @@ module test(
 
 );
 
+    // ================= 锁相环 =================
+    wire c0, c1, locked;
+    my_pll my_pll_inst (
+        .areset  (~reset_n), // 关键：低有效转高有效
+        .inclk0  (clk),
+        .c0      (c0),// 20MHz
+        .c1      (c1),// 200MHz
+        .locked  (locked)
+    );
+
+    // 新的复位信号
+    wire combined_reset_n = reset_n & locked;  // 当 reset_n=1 且 locked=1 时，复位解除
+    reg sync_reset_n;// 同步复位信号
+    always_ff @(posedge clk) begin
+        sync_reset_n <= combined_reset_n;
+    end
+
     // ================= 用户接口 =================
     logic [15:0] rd_data;
     logic [15:0] wr_data;
     logic          state;       // 1:读 0:写
     logic [3:0]       cs;
 
+
+    // ================= 用户模块 =================
     fsmc_interface fsmc(
         .AD(AD),
         .NADV(NADV),
         .NWE(NWE),
         .NOE(NOE),
-        .clk(clk),
-        .reset_n(reset_n),
+        .clk(c1),
+        .reset_n(sync_reset_n),
         .rd_data(rd_data),
         .wr_data(wr_data),
         .state(state),
@@ -31,8 +50,8 @@ module test(
     );
 
     test_reg test_reg(
-        .clk(clk),
-        .reset_n(reset_n),
+        .clk(c1),
+        .reset_n(sync_reset_n),
         .en(cs[0]),
         .rd_data(rd_data),
         .wr_data(wr_data),
