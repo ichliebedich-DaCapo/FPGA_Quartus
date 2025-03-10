@@ -99,14 +99,6 @@ set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -rise
 set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -fall
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -rise
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -fall
-set_global_assignment -name SYSTEMVERILOG_FILE module/TB/tb_auto_gain_control.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/auto_gain_control.sv
-set_global_assignment -name SYSTEMVERILOG_FILE program/test/tb_test.sv
-set_global_assignment -name SYSTEMVERILOG_FILE program/test/test.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/TB/test_reg_tb.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/test_reg.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/TB/fsmc_interface_tb.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/fsmc_interface.sv
 set_global_assignment -name QIP_FILE IP/PLL/my_pll.qip
 set_global_assignment -name QIP_FILE IP/FIFO/async_fifo.qip
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
