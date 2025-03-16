@@ -1,5 +1,5 @@
 module auto_gain_control (
-    input clk,
+    input clk,// 看门狗系统所需时钟
     input adc_clk,
     input rst_n,
     input [11:0] adc_data,
@@ -65,9 +65,37 @@ reg [11:0] peak, valley;
 reg [9:0] sample_count; // 存储512个采样点
 reg [1:0] next_gain_idx;
 
+// 防止adc_clk一直为低电平。主时钟200M，而采样频率最低可达100K，即相差2000倍，取极端情况，2000*100
+// 看门狗参数
+localparam WATCHDOG_TIMEOUT = 24'hFFFFFF; // 约33ms @200MHz
+reg [23:0] watchdog_counter;
+reg adc_clk_prev;  // 同步寄存器
+wire adc_clk_changed;
+reg watchdog_timeout;
 
-always @(negedge adc_clk or negedge rst_n) begin
+always @(posedge clk ) begin
+    adc_clk_prev <= adc_clk;// 同步寄存器
+    watchdog_timeout <= (watchdog_counter >= WATCHDOG_TIMEOUT);
+end
+
+assign adc_clk_changed = (adc_clk ^ adc_clk_prev);// adc_clk变化检测
+
+// 看门狗计数器
+always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
+        watchdog_counter <= 0;
+    end else if (adc_clk_changed) begin
+        watchdog_counter <= 0;  // 检测到时钟活动时重置
+    end else if (watchdog_counter < WATCHDOG_TIMEOUT) begin
+        watchdog_counter <= watchdog_counter + 1;
+    end
+end
+
+// 全局复位信号
+wire global_reset_n = rst_n & ~watchdog_timeout;
+
+always @(negedge adc_clk or negedge global_reset_n) begin
+    if (!global_reset_n) begin
         state <= IDLE;
         current_gain_idx <= GAIN_3;// 初始最低增益
         relay_ctrl <= GAIN_MAP[GAIN_3];
@@ -112,11 +140,11 @@ always @(negedge adc_clk or negedge rst_n) begin
                 // 比较峰值和谷值
                 if (peak > gain_limits[current_gain_idx].upper) begin
                     // 调低增益
-                    next_gain_idx = (current_gain_idx < GAIN_3) ? current_gain_idx + 1 : current_gain_idx;
+                    next_gain_idx = (current_gain_idx > GAIN_3) ? current_gain_idx + 1 : current_gain_idx;
                     state <= ADJUST;
                 end else if (valley < gain_limits[current_gain_idx].lower) begin
                     // 调高增益
-                    next_gain_idx = (current_gain_idx > GAIN_29_25) ? current_gain_idx - 1 : current_gain_idx;
+                    next_gain_idx = (current_gain_idx < GAIN_29_25) ? current_gain_idx + 1 : current_gain_idx;
                     state <= ADJUST;
                 end else begin
                     // 无需调整，重新采样

@@ -24,32 +24,38 @@ initial begin
     join
 end
 // =========================================时钟周期定义======================================
-logic reset;
+
 // 信号定义
-logic [2:0] div;
-logic ADC_CLK;
+logic rst_n;
+logic [11:0] adc_data;
+logic [1:0] relay_ctrl;
+logic stable;
+
+// 实例化被测模块
+
+
 
 
 
 // **************用于测试*****************
-// 被测模块实例化
-divider_10 uut(
-    .clk(clk),
-    .rst_n(reset),
-    .div(div),
-    .ADC_CLK(ADC_CLK)
+auto_gain_control dut (
+    .adc_clk(clk),
+    .rst_n(rst_n),
+    .adc_data(adc_data),
+    .relay_ctrl(relay_ctrl),
+    .stable(stable)
 );
 
 
 // ===================初始设置==================
 initial begin
     // 初始化所有输入信号
-    reset = 1'b1;
+    rst_n = 1'b1;
     div = 0 ;
 
     // 释放复位
-    reset = 1'b0;#5;
-    reset = 1'b1;#5;
+    rst_n = 1'b0;#5;
+    rst_n = 1'b1;#5;
 
 
     // 开始测试
