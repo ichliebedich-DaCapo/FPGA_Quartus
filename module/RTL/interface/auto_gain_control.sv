@@ -155,16 +155,16 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                 end else begin
                     // 维护峰值队列
                     if(adc_data > peak_samples[PEAK_SAMPLE_NUM-1]) begin
-                        // 插入排序更新峰值队列，8个必然会满
-                        for(int i=PEAK_SAMPLE_NUM-2; i>=0; i--) begin
-                            if(adc_data > peak_samples[i]) begin
-                                peak_samples[i+1] = peak_samples[i];
-                            end else begin
-                                peak_samples[i+1] = adc_data;
-                                break;
+                        // 移位插入新值
+                        peak_samples[PEAK_SAMPLE_NUM-1] <= adc_data;
+                        for (int i=PEAK_SAMPLE_NUM-2; i>=0; i--) begin
+                            if (peak_samples[i] < peak_samples[i+1]) begin
+                                // 交换位置
+                                automatic logic [11:0] temp = peak_samples[i];
+                                peak_samples[i] <= peak_samples[i+1];
+                                peak_samples[i+1] <= temp;
                             end
                         end
-                        peak_samples[0] <= adc_data;
                     end
 
                     // 检测窗口结束
@@ -179,7 +179,7 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                 // 计算峰值平均值
                 automatic logic [15:0] sum_temp = 0;
                 for(int i=0; i<PEAK_SAMPLE_NUM; i=i+1) begin
-                    sum_temp = sum_temp + peak_samples[i];
+                    sum_temp = sum_temp + peak_samples[i]; // 阻塞赋值计算
                 end
                 peak_sum <= sum_temp[15:3]; // 除以8
 
