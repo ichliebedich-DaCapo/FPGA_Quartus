@@ -47,13 +47,20 @@ end
 
 // 检测窗口大小（例如1000个采样点）
 localparam SAMPLE_WINDOW_SIZE = 512;
-
+localparam PEAK_SAMPLE_NUM = 8;     // 取8个最高峰值
+localparam PEAK_INDEX_BITS = $clog2(PEAK_SAMPLE_NUM);
 localparam WAIT_STABLE_DELAY = 5;
 reg [3:0] wait_counter;
 
+// 峰值存储结构
+reg [11:0] peak_samples [0:PEAK_SAMPLE_NUM-1];
+reg [PEAK_INDEX_BITS-1:0] peak_ptr;
+reg [12:0] peak_sum; // 12bit*8=15bit
+
 // 状态机定义
 enum logic [2:0] {
-    IDLE,
+    RESET,
+    READY,// 准备状态，等待进入采样时刻
     SAMPLING,
     EVALUATE,
     ADJUST,
@@ -61,24 +68,25 @@ enum logic [2:0] {
 } state;
 
 reg [1:0] current_gain_idx;
-reg [11:0] peak, valley;
 reg [9:0] sample_count; // 存储512个采样点
 reg [1:0] next_gain_idx;
 
 // 防止adc_clk一直为低电平。主时钟200M，而采样频率最低可达100K，即相差2000倍，取极端情况，2000*100
 // 看门狗参数
-localparam WATCHDOG_TIMEOUT = 24'hFFFFFF; // 约33ms @200MHz
-reg [23:0] watchdog_counter;
+localparam WATCHDOG_TIMEOUT = 20'hFFFFF; // 200*1000 @200MHz -> 1KHz
+reg [19:0] watchdog_counter;
 reg adc_clk_prev;  // 同步寄存器
 wire adc_clk_changed;
 reg watchdog_timeout;
 
+// 同步块
 always @(posedge clk ) begin
     adc_clk_prev <= adc_clk;// 同步寄存器
     watchdog_timeout <= (watchdog_counter >= WATCHDOG_TIMEOUT);
 end
 
 assign adc_clk_changed = (adc_clk ^ adc_clk_prev);// adc_clk变化检测
+wire adc_clk_rising = ~adc_clk & adc_clk_prev;// adc_clk下降沿
 
 // 看门狗计数器
 always @(posedge clk or negedge rst_n) begin
@@ -94,71 +102,106 @@ end
 // 全局复位信号
 wire global_reset_n = rst_n & ~watchdog_timeout;
 
-always @(negedge adc_clk or negedge global_reset_n) begin
-    if (!global_reset_n) begin
-        state <= IDLE;
+
+// 【注意】：这里是假定采样频率为1K以上，如果低于这个频率，那么这里的运算逻辑需要移送至主时钟域200MHz
+reg is_overvoltage;// 过压条件
+always @(posedge adc_clk or negedge global_reset_n) begin
+    if(!global_reset_n)begin
+        state <= RESET;// 初始状态
         current_gain_idx <= GAIN_3;// 初始最低增益
         relay_ctrl <= GAIN_MAP[GAIN_3];
         stable <= 0;
-        peak <= 0;
-        valley <= 12'hFFF;
+        peak_sum <= 0;
         sample_count <= 0;
         wait_counter <= 0;
+        is_overvoltage <= 0;
+        // 清空峰值队列
+        for(int i=0; i<PEAK_SAMPLE_NUM; i=i+1) begin
+            peak_samples[i] <= 0;
+        end
     end else begin
         case (state)
-            IDLE: begin
+            RESET: begin
                 // 初始化采样参数
-                peak <= 0;
-                valley <= 12'hFFF;
-                sample_count <= 0;
                 state <= SAMPLING;
+                peak_sum <= 0;
+                sample_count <= 0;
+                wait_counter <= 0;
+                is_overvoltage <= 0;
+                // 清空峰值队列
+                for(int i=0; i<PEAK_SAMPLE_NUM; i=i+1) begin
+                    peak_samples[i] <= 0;
+                end
             end
-
+            READY: begin
+                if(adc_clk_rising)begin
+                    state <= SAMPLING;// 进入采样阶段
+                end else begin
+                    state <= READY;
+                end
+            end
             SAMPLING: begin
                 // 检查过压条件
                 if (adc_data >= OVER_VOLTAGE_THRESHOLD) begin
                     // 立即调低增益
-                    current_gain_idx = (current_gain_idx < GAIN_3) ? current_gain_idx + 1 : current_gain_idx;
+                    current_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1 : current_gain_idx;
                     relay_ctrl <= GAIN_MAP[current_gain_idx];
 
                     // 迅速再次检测
-                    state <= SAMPLING;
+                    is_overvoltage <= 1;
+                    state <= READY;
                     sample_count <=0;
                     stable <= 0;    // 不稳定
                 end else begin
-                    // 更新峰值和谷值
-                    if (adc_data > peak)
-                        peak <= adc_data;
-                    if (adc_data < valley)
-                        valley <= adc_data;
-                    sample_count <= sample_count + 1;
+                    // 维护峰值队列
+                    if(adc_data > peak_samples[PEAK_SAMPLE_NUM-1]) begin
+                        // 插入排序更新峰值队列，8个必然会满
+                        for(int i=PEAK_SAMPLE_NUM-2; i>=0; i--) begin
+                            if(adc_data > peak_samples[i]) begin
+                                peak_samples[i+1] = peak_samples[i];
+                            end else begin
+                                peak_samples[i+1] = adc_data;
+                                break;
+                            end
+                        end
+                        peak_samples[0] <= adc_data;
+                    end
 
                     // 检测窗口结束
-                    if (sample_count[9] == 1'b1)
+                    if (sample_count == SAMPLE_WINDOW_SIZE-1)
                         state <= EVALUATE;
+                    else 
+                        sample_count <= sample_count + 1;
                 end
             end
-
             // 评估结果
             EVALUATE: begin
-                // 比较峰值和谷值
-                if (peak > gain_limits[current_gain_idx].upper) begin
+                // 计算峰值平均值
+                automatic logic [15:0] sum_temp = 0;
+                for(int i=0; i<PEAK_SAMPLE_NUM; i=i+1) begin
+                    sum_temp = sum_temp + peak_samples[i];
+                end
+                peak_sum <= sum_temp[15:3]; // 除以8
+
+                // 比较峰值
+                if (peak_sum > gain_limits[current_gain_idx].upper) begin
                     // 调低增益
-                    next_gain_idx = (current_gain_idx > GAIN_3) ? current_gain_idx + 1 : current_gain_idx;
+                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1 : current_gain_idx;
                     state <= ADJUST;
-                end else if (valley < gain_limits[current_gain_idx].lower) begin
+                end else if (peak_sum < gain_limits[current_gain_idx].lower) begin
                     // 调高增益
-                    next_gain_idx = (current_gain_idx < GAIN_29_25) ? current_gain_idx + 1 : current_gain_idx;
+                    next_gain_idx <= (current_gain_idx < GAIN_29_25) ? current_gain_idx + 1 : current_gain_idx;
                     state <= ADJUST;
                 end else begin
                     // 无需调整，重新采样
                     stable <= 1;// 说明很稳定
-                    state <= SAMPLING;
-                    peak <= 0;
-                    valley <= 12'hFFF;
+                    state <= READY;
                     sample_count <= 0;
+                    // 清空峰值队列
+                    for(int i=0; i<PEAK_SAMPLE_NUM; i=i+1) begin
+                        peak_samples[i] <= 0;
+                    end
                 end
-                
             end
 
             // 调整增益，说明不稳定
@@ -167,22 +210,27 @@ always @(negedge adc_clk or negedge global_reset_n) begin
                 current_gain_idx <= next_gain_idx;
                 // 设置继电器控制信号
                 relay_ctrl <= GAIN_MAP[next_gain_idx];
-                // 进入稳定等待
-                wait_counter <= WAIT_STABLE_DELAY; // 等待5个adc_clk周期
-                state <= WAIT_STABLE;
                 stable <= 0;// 不稳定
-            end
 
-            WAIT_STABLE: begin
-                if (wait_counter > 0) begin
-                    wait_counter <= wait_counter - 1;
+                if(is_overvoltage)begin
+                    state <= RESET;
                 end else begin
-                    state <= IDLE;
-                    stable <= 1;// 标记为稳定，等下轮评估结果再决定稳不稳定
+                    state <= WAIT_STABLE;
                 end
             end
 
-            default: state <= IDLE;
+            WAIT_STABLE: begin
+                if(adc_clk_rising)begin
+                    if (wait_counter >=WAIT_STABLE_DELAY) begin
+                        state <= RESET;
+                        stable <= 1;// 标记为稳定，等下轮评估结果再决定稳不稳定                
+                    end else begin
+                        wait_counter <= wait_counter + 1;
+                    end
+                 end
+            end
+
+            default: state <= RESET;
         endcase
     end
 end
