@@ -53,19 +53,16 @@ set_global_assignment -name EDA_OUTPUT_DATA_FORMAT "SYSTEMVERILOG HDL" -section_
 set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
 set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
 set_global_assignment -name EDA_TEST_BENCH_ENABLE_STATUS TEST_BENCH_MODE -section_id eda_simulation
-set_global_assignment -name EDA_NATIVELINK_SIMULATION_TEST_BENCH tb_test -section_id eda_simulation
+set_global_assignment -name EDA_NATIVELINK_SIMULATION_TEST_BENCH tb_divider_10 -section_id eda_simulation
 set_global_assignment -name EDA_TEST_BENCH_NAME fsmc_interface_tb -section_id eda_simulation
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id fsmc_interface_tb
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME fsmc_interface_tb -section_id fsmc_interface_tb
 set_global_assignment -name EDA_TEST_BENCH_NAME test_reg_tb -section_id eda_simulation
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id test_reg_tb
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME test_reg_tb -section_id test_reg_tb
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/fsmc_interface_tb.sv -section_id fsmc_interface_tb
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/test_reg_tb.sv -section_id test_reg_tb
 set_global_assignment -name EDA_TEST_BENCH_NAME tb_test -section_id eda_simulation
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id tb_test
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_test -section_id tb_test
-set_global_assignment -name EDA_TEST_BENCH_FILE program/test/tb_test.sv -section_id tb_test
 set_location_assignment PIN_28 -to AD[17]
 set_location_assignment PIN_30 -to AD[16]
 set_location_assignment PIN_59 -to AD[15]
@@ -99,6 +96,18 @@ set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -rise
 set_global_assignment -name OUTPUT_IO_TIMING_NEAR_END_VMEAS "HALF VCCIO" -fall
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -rise
 set_global_assignment -name OUTPUT_IO_TIMING_FAR_END_VMEAS "HALF SIGNAL SWING" -fall
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/fsmc_interface_tb.sv -section_id fsmc_interface_tb
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/test_reg_tb.sv -section_id test_reg_tb
+set_global_assignment -name EDA_TEST_BENCH_FILE program/test/tb_test.sv -section_id tb_test
+set_global_assignment -name EDA_TEST_BENCH_NAME tb_divider_10 -section_id eda_simulation
+set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id tb_divider_10
+set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_divider_10 -section_id tb_divider_10
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_divider_10.sv -section_id tb_divider_10
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/auto_gain_control.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/adc_interface.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/TB/internal/tb_divider_10.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/divider_10.sv
 set_global_assignment -name QIP_FILE IP/PLL/my_pll.qip
 set_global_assignment -name QIP_FILE IP/FIFO/async_fifo.qip
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top

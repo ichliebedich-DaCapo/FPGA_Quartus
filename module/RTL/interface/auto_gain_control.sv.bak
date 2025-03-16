@@ -13,7 +13,7 @@ localparam GAIN_6_5   = 2'd1; // relay_ctrl=2'b01
 localparam GAIN_13_5  = 2'd2; // relay_ctrl=2'b10
 localparam GAIN_29_25 = 2'd3; // relay_ctrl=2'b11
 // 增益映射表修正（索引与增益对应）
-localparam logic [1:0] GAIN_MAP[4] = '{
+localparam [1:0] GAIN_MAP[4] = '{
     GAIN_3     : 2'b00,
     GAIN_6_5   : 2'b01,
     GAIN_13_5  : 2'b10,
