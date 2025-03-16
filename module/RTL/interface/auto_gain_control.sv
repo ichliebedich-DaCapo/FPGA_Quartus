@@ -118,8 +118,12 @@ always @(negedge adc_clk or negedge global_reset_n) begin
                 // 检查过压条件
                 if (adc_data >= OVER_VOLTAGE_THRESHOLD) begin
                     // 立即调低增益
-                    next_gain_idx = (current_gain_idx < GAIN_3) ? current_gain_idx + 1 : current_gain_idx;
-                    state <= ADJUST;
+                    current_gain_idx = (current_gain_idx < GAIN_3) ? current_gain_idx + 1 : current_gain_idx;
+                    relay_ctrl <= GAIN_MAP[current_gain_idx];
+
+                    // 迅速再次检测
+                    state <= SAMPLING;
+                    sample_count <=0;
                     stable <= 0;    // 不稳定
                 end else begin
                     // 更新峰值和谷值
