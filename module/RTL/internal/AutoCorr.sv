@@ -1,4 +1,4 @@
-// 自相关计算模块
+// 自相关计算模块，用于检测1024个数据的周期，采用无独立缓冲区的实时自相关架构，只需大小为512的必要缓冲区
 module AutoCorr #(
     parameter DATA_WIDTH = 12,  // 数据位宽
     parameter MAX_TAU = 256     // 最大延迟点数
@@ -11,93 +11,93 @@ module AutoCorr #(
     output stable   // 高电平为稳定
 );
 
-// 跨时钟域同步单元
-(* ASYNC_REG = "TRUE" *) reg [DATA_WIDTH:0] sync_data[0:2]; // 带符号扩展
+// ===========跨时钟域同步=============
+(* ASYNC_REG = "TRUE" *) reg [DATA_WIDTH:0] sync_data[0:2];
+(* ASYNC_REG = "TRUE" *) reg [2:0] en_sync;
 
-// 滑动窗口寄存器
-reg signed [DATA_WIDTH:0] window [0:2*MAX_TAU-1]; // 512深度窗口
-reg [9:0] wr_ptr = 0;
+reg [1:0] adc_clk_sync;
 
-// 增量相关值存储
-reg signed [31:0] corr_values [0:MAX_TAU-1];
-reg [1:0] state = 0;
+wire en_valid = en_sync[2];
 
-// 稳定检测相关
-reg [15:0] history [0:2];
-reg [1:0] hist_ptr = 0;
-reg [15:0] variance = 0;
-
-// 跨时钟域同步处理
-always @(negedge adc_clk) begin
-    sync_data[0] <= {data_in[DATA_WIDTH-1], data_in}; // 符号扩展
-end
-
+// 数据同步链
+always @(negedge adc_clk) sync_data[0] <= {data_in[DATA_WIDTH-1], data_in};
 always @(posedge clk) begin
-    // 同步数据链
+    adc_clk_sync <= {adc_clk_sync[1:0], adc_clk};
     sync_data[1] <= sync_data[0];
-    sync_data[2] <= sync_data[1];
+    en_sync <= {en_sync[1:0], en};
 end
+wire adc_clk_falling = ~adc_clk_sync[1] & adc_clk_sync[0];// adc_clk下降沿
 
-wire adc_clk_falling = !adc_clk && adc_clk_falling;// 下降沿
+// 滑动窗口
+reg signed [DATA_WIDTH:0] window [0:2*MAX_TAU-1];
+reg [9:0] wr_ptr;
 
-// 主处理逻辑
+// 相关值存储
+reg signed [31:0] corr_values [0:MAX_TAU-1];
+reg signed [33:0] calc,variance,avg;
+
+reg [1:0] state;
+
+// 稳定检测
+reg [15:0] history[0:2];
+reg [1:0] hist_ptr;
+
+// ============状态机=============
 always @(posedge clk) begin
-    if(!en)begin
-        // 初始化复位
+    if(!en_valid) begin
+        wr_ptr <= 0;
+        state <= 0;
+        stable <= 0;
         for(int i=0; i<2*MAX_TAU; i++) window[i] = 0;
         for(int j=0; j<MAX_TAU; j++) corr_values[j] = 0;
-        stable = 0;
     end else begin
         case(state)
-            0: begin // 等待新数据
-                if(adc_clk_falling) begin // adc_clk下降沿
-                    // 更新滑动窗口
+            0: begin
+                if(adc_clk_falling) begin
                     window[wr_ptr] <= sync_data[2];
                     wr_ptr <= (wr_ptr == 2*MAX_TAU-1) ? 0 : wr_ptr + 1;
-                    
-                    // 启动增量计算
                     state <= 1;
                 end
             end
             
-            1: begin // 并行计算相关值
+            1: begin
                 for(int i=0; i<MAX_TAU; i++) begin
+                    automatic integer idx_new = (wr_ptr - i + 2*MAX_TAU) % (2*MAX_TAU);
                     automatic integer idx_old = (wr_ptr - i - MAX_TAU + 2*MAX_TAU) % (2*MAX_TAU);
-                    corr_values[i] <= corr_values[i] + 
-                        window[(wr_ptr - i + 2*MAX_TAU) % (2*MAX_TAU)] * sync_data[2] -
+                    calc = corr_values[i] + window[idx_new] * sync_data[2] - 
                         window[idx_old] * window[(idx_old + i) % (2*MAX_TAU)];
+                    corr_values[i] <= (|calc[33:31]) ? 32'h7FFF_FFFF : calc[31:0];
                 end
                 state <= 2;
             end
             
-            2: begin // 峰值检测
+            2: begin
                 reg [31:0] max_val = 0;
-                reg [8:0] peak_idx = 50; // 忽略前50个点
-                for(int j=50; j<MAX_TAU; j++) begin
+                reg [8:0] peak_idx = 10; // 最小周期保护
+                for(int j=10; j<MAX_TAU; j++) begin
                     if(corr_values[j] > max_val) begin
                         max_val = corr_values[j];
                         peak_idx = j;
                     end
                 end
                 
-                // 更新历史记录
+                // 更新历史
                 history[hist_ptr] <= peak_idx;
                 hist_ptr <= hist_ptr + 1;
                 
-                // 计算稳定性
+                // 稳定性判断
                 if(hist_ptr == 2) begin
-                    reg [15:0] avg = (history[0] + history[1] + history[2]) / 3;
+                    avg = (history[0] + history[1] + history[2]) / 3;
                     variance = ((history[0]-avg)**2 + (history[1]-avg)**2 + (history[2]-avg)**2)/3;
-                    stable <= (variance < (avg >> 5)); // 约3%容差
-                    period <= avg << 1; // 转换为完整周期
+                    stable <= (variance < (avg * 3 / 100)); // 3%容差
+                    period <= avg << 1;
                 end
-                
                 state <= 0;
             end
         endcase
     end
-
 end
+
 
 
 endmodule
