@@ -4,7 +4,7 @@ module fixed_to_float #(
     parameter MANT_WIDTH = 23
 )(
     input clk,
-    input areset,               // 异步复位
+    input rst_n,               // 异步复位
     input signed [FIXED_WIDTH-1:0] a,  // 修正点1：输入端口不能声明为 reg
     output reg [EXP_WIDTH+MANT_WIDTH:0] q  // 单精度浮点输出
 );
@@ -26,8 +26,8 @@ reg [MANT_WIDTH-1:0] stage3_mant;
 reg stage3_sign;
 reg [FIXED_WIDTH+MANT_WIDTH:0] shifted; // 声明足够宽的移位寄存器
 // ================== 主转换逻辑 ==================
-always @(posedge clk or posedge areset) begin
-    if (areset) begin
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         {stage1_abs, stage1_sign} <= 0;
         {stage2_lz, stage2_abs} <= 0;
         {stage3_exp, stage3_mant, stage3_sign} <= 0;
