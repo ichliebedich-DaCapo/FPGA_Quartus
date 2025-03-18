@@ -83,14 +83,14 @@ always @(posedge clk) begin
                 
                 // 更新历史
                 history[hist_ptr] <= peak_idx;
-                hist_ptr <= hist_ptr + 1;
+                hist_ptr <= (hist_ptr == 2) ? 0 : hist_ptr + 1;
                 
                 // 稳定性判断
                 if(hist_ptr == 2) begin
                     avg = (history[0] + history[1] + history[2]) / 3;
-                    variance = ((history[0]-avg)**2 + (history[1]-avg)**2 + (history[2]-avg)**2)/3;
-                    stable <= (variance < (avg * 3 / 100)); // 3%容差
-                    period <= avg << 1;
+                    variance = ((history[0]-avg)**2 + (history[1]-avg)**2 + (history[2]-avg)**2);
+                    stable <= (variance * 100 < avg * 3);
+                    period <= avg; // 移除左移
                 end
                 state <= 0;
             end
