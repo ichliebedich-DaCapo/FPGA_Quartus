@@ -1,0 +1,89 @@
+Info: Starting: Create simulation model
+Info: qsys-generate E:\Program\Embedded\FPGA\Firefly\IP\IFFT_1024\ifft_1024.qsys --simulation=VERILOG --allow-mixed-language-simulation --output-directory=E:\Program\Embedded\FPGA\Firefly\IP\IFFT_1024\ifft_1024\simulation --family="Cyclone IV E" --part=EP4CE6E22C8
+Progress: Loading IFFT_1024/ifft_1024.qsys
+Progress: Reading input file
+Progress: Adding fft_ii_0 [altera_fft_ii 18.0]
+Progress: Parameterizing module fft_ii_0
+Progress: Building connections
+Progress: Parameterizing connections
+Progress: Validating
+Progress: Done reading input file
+Info: ifft_1024.fft_ii_0: Radix-4 digit reverse implied
+Info: ifft_1024: Generating ifft_1024 "ifft_1024" for SIM_VERILOG
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twqfp1.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twqfp2.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twqfp3.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twqfp4.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twifp1.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twrfp1.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twifp2.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twifp3.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twrfp2.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twifp4.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twrfp3.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twrfp4.hex
+Info: fft_ii_0: "ifft_1024" instantiated altera_fft_ii "fft_ii_0"
+Info: ifft_1024: Done "ifft_1024" with 2 modules, 172 files
+Info: qsys-generate succeeded.
+Info: Finished: Create simulation model
+Info: Starting: Create Modelsim Project.
+Info: sim-script-gen --spd=E:\Program\Embedded\FPGA\Firefly\IP\IFFT_1024\ifft_1024\ifft_1024.spd --output-directory=E:/Program/Embedded/FPGA/Firefly/IP/IFFT_1024/ifft_1024/simulation/ --use-relative-paths=true
+Info: Doing: ip-make-simscript --spd=E:\Program\Embedded\FPGA\Firefly\IP\IFFT_1024\ifft_1024\ifft_1024.spd --output-directory=E:/Program/Embedded/FPGA/Firefly/IP/IFFT_1024/ifft_1024/simulation/ --use-relative-paths=true
+Info: Generating the following file(s) for MODELSIM simulator in E:/Program/Embedded/FPGA/Firefly/IP/IFFT_1024/ifft_1024/simulation/ directory:
+Info: 	mentor/msim_setup.tcl
+Info: Skipping VCS script generation since VHDL file $QUARTUS_INSTALL_DIR/eda/sim_lib/altera_syn_attributes.vhd is required for simulation
+Info: Generating the following file(s) for VCSMX simulator in E:/Program/Embedded/FPGA/Firefly/IP/IFFT_1024/ifft_1024/simulation/ directory:
+Info: 	synopsys/vcsmx/synopsys_sim.setup
+Info: 	synopsys/vcsmx/vcsmx_setup.sh
+Info: Generating the following file(s) for NCSIM simulator in E:/Program/Embedded/FPGA/Firefly/IP/IFFT_1024/ifft_1024/simulation/ directory:
+Info: 	cadence/cds.lib
+Info: 	cadence/hdl.var
+Info: 	cadence/ncsim_setup.sh
+Info: 	1 .cds.lib files in cadence/cds_libs/ directory
+Info: Generating the following file(s) for RIVIERA simulator in E:/Program/Embedded/FPGA/Firefly/IP/IFFT_1024/ifft_1024/simulation/ directory:
+Info: 	aldec/rivierapro_setup.tcl
+Info: For information on how to simulate your IP, see the explanatory comments in the simulator-specific subdirectories under E:/Program/Embedded/FPGA/Firefly/IP/IFFT_1024/ifft_1024/simulation/.
+Info: Regenerate these scripts whenever you make any change to any Quartus-generated IP in your project.
+Info: Finished: Create Modelsim Project.
+Info: Starting: Create block symbol file (.bsf)
+Info: qsys-generate E:\Program\Embedded\FPGA\Firefly\IP\IFFT_1024\ifft_1024.qsys --block-symbol-file --output-directory=E:\Program\Embedded\FPGA\Firefly\IP\IFFT_1024\ifft_1024 --family="Cyclone IV E" --part=EP4CE6E22C8
+Progress: Loading IFFT_1024/ifft_1024.qsys
+Progress: Reading input file
+Progress: Adding fft_ii_0 [altera_fft_ii 18.0]
+Progress: Parameterizing module fft_ii_0
+Progress: Building connections
+Progress: Parameterizing connections
+Progress: Validating
+Progress: Done reading input file
+Info: ifft_1024.fft_ii_0: Radix-4 digit reverse implied
+Info: qsys-generate succeeded.
+Info: Finished: Create block symbol file (.bsf)
+Info: 
+Info: Starting: Create HDL design files for synthesis
+Info: qsys-generate E:\Program\Embedded\FPGA\Firefly\IP\IFFT_1024\ifft_1024.qsys --synthesis=VERILOG --output-directory=E:\Program\Embedded\FPGA\Firefly\IP\IFFT_1024\ifft_1024\synthesis --family="Cyclone IV E" --part=EP4CE6E22C8
+Progress: Loading IFFT_1024/ifft_1024.qsys
+Progress: Reading input file
+Progress: Adding fft_ii_0 [altera_fft_ii 18.0]
+Progress: Parameterizing module fft_ii_0
+Progress: Building connections
+Progress: Parameterizing connections
+Progress: Validating
+Progress: Done reading input file
+Info: ifft_1024.fft_ii_0: Radix-4 digit reverse implied
+Info: ifft_1024: Generating ifft_1024 "ifft_1024" for QUARTUS_SYNTH
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twqfp1.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twqfp2.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twqfp3.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twqfp4.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twifp1.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twrfp1.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twifp2.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twifp3.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twrfp2.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twifp4.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twrfp3.hex
+Info: fft_ii_0: --- add file: ifft_1024_fft_ii_0_twrfp4.hex
+Info: fft_ii_0: "ifft_1024" instantiated altera_fft_ii "fft_ii_0"
+Info: ifft_1024: Done "ifft_1024" with 2 modules, 70 files
+Info: qsys-generate succeeded.
+Info: Finished: Create HDL design files for synthesis

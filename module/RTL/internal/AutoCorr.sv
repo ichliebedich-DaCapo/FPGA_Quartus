@@ -1,7 +1,6 @@
 // 自相关计算模块，用于检测1024个数据的周期，采用无独立缓冲区的实时自相关架构，只需大小为512的必要缓冲区
 module AutoCorr #(
     parameter DATA_WIDTH = 12,  // 数据位宽
-    parameter MAX_TAU = 256     // 最大延迟点数
 )(
     input clk,                  // 200MHz主时钟
     input adc_clk,              // 10MHzADC时钟,在下降沿处更新data_in数据
@@ -11,99 +10,187 @@ module AutoCorr #(
     output reg stable   // 高电平为稳定
 );
 
-// ===========跨时钟域同步=============
-(* ASYNC_REG = "TRUE" *) reg [DATA_WIDTH:0] sync_data[0:2];
-(* ASYNC_REG = "TRUE" *) reg [2:0] en_sync;
+// ================= 跨时钟域处理 =================
+reg [DATA_WIDTH-1:0] cdc_buffer[0:1];
+reg adc_clk_dly;
 
-reg [1:0] adc_clk_sync;
-
-wire en_valid = en_sync[2];
-
-// 数据同步链
-always @(negedge adc_clk) sync_data[0] <= {data_in[DATA_WIDTH-1], data_in};
-always @(posedge clk) begin
-    adc_clk_sync <= {adc_clk_sync[1:0], adc_clk};
-    sync_data[1] <= sync_data[0];
-    en_sync <= {en_sync[1:0], en};
+always @(negedge adc_clk) begin
+    cdc_buffer[0] <= data_in;  // ADC下降沿捕获数据
 end
-wire adc_clk_falling = ~adc_clk_sync[1] & adc_clk_sync[0];// adc_clk下降沿
 
-// 滑动窗口
-reg signed [DATA_WIDTH:0] window [0:2*MAX_TAU-1];
-reg [9:0] wr_ptr;
-
-// 相关值存储
-reg signed [31:0] corr_values [0:MAX_TAU-1];
-reg signed [33:0] calc,variance,avg;
-
-// 稳定检测
-reg [15:0] history[0:2];
-reg [1:0] hist_ptr;
-reg [31:0] max_val;
-reg [8:0] peak_idx;
-
-typedef enum logic [1:0] {
-    IDLE     = 2'b00,
-    CALC     = 2'b01,
-    DETECT   = 2'b10,
-    SAFE     = 2'b11  // 新增安全状态
-} state_t;
-state_t state;
-
-// ============状态机=============
 always @(posedge clk) begin
-    if(!en_valid) begin
-        wr_ptr <= 0;
-        state <= IDLE;
-        stable <= 0;
-        for(int i=0; i<2*MAX_TAU; i++) window[i] = 0;
-        for(int j=0; j<MAX_TAU; j++) corr_values[j] = 0;
-    end else begin
-        case(state)
-            IDLE: begin
-                if(adc_clk_falling) begin
-                    window[wr_ptr] <= sync_data[2];
-                    wr_ptr <= (wr_ptr == 2*MAX_TAU-1) ? 0 : wr_ptr + 1;
-                    state <= CALC;
-                end
-            end
-            
-            CALC: begin
-                for(int i=0; i<MAX_TAU; i++) begin
-                    automatic integer idx_new = (wr_ptr - i + 2*MAX_TAU) % (2*MAX_TAU);
-                    automatic integer idx_old = (wr_ptr - i - MAX_TAU + 2*MAX_TAU) % (2*MAX_TAU);
-                    calc = corr_values[i] + window[idx_new] * sync_data[2] - 
-                        window[idx_old] * window[(idx_old + i) % (2*MAX_TAU)];
-                    corr_values[i] <= (|calc[33:31]) ? 32'h7FFF_FFFF : calc[31:0];
-                end
-                state <= DETECT;
-            end
-            
-            DETECT: begin
-                max_val = 0;
-                peak_idx = 10; // 最小周期保护
-                for(int j=10; j<MAX_TAU; j++) begin
-                    if(corr_values[j] > max_val) begin
-                        max_val = corr_values[j];
-                        peak_idx = j;
-                    end
-                end
-                
-                // 更新历史
-                history[hist_ptr] <= peak_idx;
-                hist_ptr <= (hist_ptr == 2) ? 0 : hist_ptr + 1;
-                
-                // 稳定性判断
-                if(hist_ptr == 2) begin
-                    avg = (history[0] + history[1] + history[2]) / 3;
-                    variance = ((history[0]-avg)**2 + (history[1]-avg)**2 + (history[2]-avg)**2);
-                    stable <= (variance * 100 < avg * 3);
-                    period <= avg; // 移除左移
-                end
-                state <= IDLE;
-            end
-            default: state <= IDLE;
-        endcase
+    adc_clk_dly <= adc_clk;
+    if (adc_clk && !adc_clk_dly) begin  // 检测ADC时钟上升沿
+        cdc_buffer[1] <= cdc_buffer[0];  // 同步到200MHz域
     end
 end
+
+// ================= FFT配置参数 =================
+localparam FFT_LENGTH = 1024;
+localparam FFT_DW = 32;  // 单精度浮点位宽
+
+// ================= 浮点转换模块 =================
+wire [FFT_DW-1:0] float_data;
+fixed_to_float u_convert (
+    .clk    (clk),
+    .areset (1'b0),
+    .a      (cdc_buffer[1]),
+    .q      (float_data)
+);
+
+// ================= FFT控制状态机 =================
+typedef enum {
+    IDLE,
+    COLLECT_DATA,
+    FFT_PROCESSING,
+    IFFT_PROCESSING,
+    PEAK_DETECTION
+} state_t;
+
+reg [2:0] state = IDLE;
+reg [10:0] data_counter = 0;
+reg [FFT_DW-1:0] fft_input_buffer[0:FFT_LENGTH-1];
+
+// ================= FFT实例化 =================
+wire fft_sink_ready;
+reg fft_sink_valid;
+reg fft_sink_sop;
+reg fft_sink_eop;
+wire [FFT_DW-1:0] fft_source_real;
+wire [FFT_DW-1:0] fft_source_imag;
+wire fft_source_valid;
+
+fft_1024 u_fft (
+    .clk          (clk),
+    .reset_n      (1'b1),
+    .sink_valid   (fft_sink_valid),
+    .sink_ready   (fft_sink_ready),
+    .sink_error   (2'b00),
+    .sink_sop     (fft_sink_sop),
+    .sink_eop     (fft_sink_eop),
+    .sink_real    (fft_input_buffer[data_counter]),
+    .sink_imag    (32'h0000_0000),
+    .fftpts_in    (10'd1024),
+    .source_valid (fft_source_valid),
+    .source_ready (1'b1),
+    .source_real  (fft_source_real),
+    .source_imag  (fft_source_imag)
+);
+
+// ================= 功率谱计算 =================
+reg [FFT_DW-1:0] power_spectrum[0:FFT_LENGTH-1];
+reg [10:0] power_counter;
+
+always @(posedge clk) begin
+    if (fft_source_valid) begin
+        power_spectrum[power_counter] <= 
+            fft_source_real * fft_source_real +
+            fft_source_imag * fft_source_imag;
+        power_counter <= (power_counter == FFT_LENGTH-1) ? 0 : power_counter + 1;
+    end
+end
+
+// ================= IFFT控制 =================
+reg ifft_sink_valid;
+reg ifft_sink_sop;
+reg ifft_sink_eop;
+wire [FFT_DW-1:0] ifft_source_real;
+wire [FFT_DW-1:0] ifft_source_imag;
+wire ifft_source_valid;
+
+fft_1024 u_ifft (
+    .clk          (clk),
+    .reset_n      (1'b1),
+    .sink_valid   (ifft_sink_valid),
+    .sink_ready   (),
+    .sink_error   (2'b00),
+    .sink_sop     (ifft_sink_sop),
+    .sink_eop     (ifft_sink_eop),
+    .sink_real    (power_spectrum[power_counter]),
+    .sink_imag    (32'h0000_0000),
+    .fftpts_in    (10'd1024),
+    .source_valid (ifft_source_valid),
+    .source_ready (1'b1),
+    .source_real  (ifft_source_real),
+    .source_imag  (ifft_source_imag)
+);
+
+// ================= 自相关缓冲区 =================
+reg [FFT_DW-1:0] ac_buffer[0:511];  // 512点有效数据
+reg [9:0] ac_counter;
+
+// ================= 峰值检测 =================
+reg [15:0] max_value = 0;
+reg [15:0] second_max = 0;
+reg [9:0] peak_index = 0;
+
+always @(posedge clk) begin
+    if (ifft_source_valid) begin
+        // 存储前512点
+        if (ac_counter < 511) begin
+            ac_buffer[ac_counter] <= ifft_source_real;
+            ac_counter <= ac_counter + 1;
+            
+            // 峰值检测逻辑
+            if (ac_counter > 0) begin  // 跳过k=0
+                if (ifft_source_real > max_value) begin
+                    second_max <= max_value;
+                    max_value <= ifft_source_real;
+                    peak_index <= ac_counter;
+                end else if (ifft_source_real > second_max) begin
+                    second_max <= ifft_source_real;
+                end
+            end
+        end else begin
+            // 完成检测
+            period <= peak_index;
+            stable <= (second_max > (max_value >> 1));  // 稳定性判断
+            ac_counter <= 0;
+            max_value <= 0;
+            second_max <= 0;
+        end
+    end
+end
+
+// ================= 主控制逻辑 =================
+always @(posedge clk) begin
+    case (state)
+        IDLE: 
+            if (en) begin
+                state <= COLLECT_DATA;
+                data_counter <= 0;
+            end
+            
+        COLLECT_DATA:
+            if (data_counter < FFT_LENGTH-1) begin
+                fft_input_buffer[data_counter] <= float_data;
+                data_counter <= data_counter + 1;
+            end else begin
+                state <= FFT_PROCESSING;
+                fft_sink_valid <= 1;
+                fft_sink_sop <= 1;
+            end
+            
+        FFT_PROCESSING:
+            if (fft_sink_ready) begin
+                fft_sink_sop <= 0;
+                if (data_counter == FFT_LENGTH-1) begin
+                    fft_sink_eop <= 1;
+                    state <= IFFT_PROCESSING;
+                end
+                data_counter <= data_counter + 1;
+            end
+            
+        IFFT_PROCESSING:
+            if (ifft_source_valid) begin
+                state <= PEAK_DETECTION;
+            end
+            
+        PEAK_DETECTION:
+            if (ac_counter == 511) begin
+                state <= IDLE;
+            end
+    endcase
+end
+
 endmodule
