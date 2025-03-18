@@ -31,18 +31,20 @@ end
 // =========================================时钟周期定义======================================
 // 信号定义
 
-    parameter FIXED_WIDTH = 12;
-    parameter EXP_WIDTH = 8;
-    parameter MANT_WIDTH = 23;
+parameter FIXED_WIDTH = 12;
+parameter EXP_WIDTH = 8;
+parameter MANT_WIDTH = 23;
 
-    reg areset;
-    reg [FIXED_WIDTH-1:0] a;
-    wire [EXP_WIDTH+MANT_WIDTH:0] q;
+reg rst_n;
+reg en;
+reg [FIXED_WIDTH-1:0] a;
+wire [EXP_WIDTH+MANT_WIDTH:0] q;
 
     // 实例化被测模块
     fixed_to_float uut (
         .clk(clk),
-        .areset(areset),
+        .rst_n(rst_n),
+        .en(en),
         .a(a),
         .q(q)
     );
@@ -51,10 +53,10 @@ end
 // ===================初始设置==================
 initial begin
     // 初始化
-    areset = 1;
+    rst_n = 0;
     a = 0;
     #100;
-    areset = 0;
+    rst_n = 1;
 
     // 开始测试
     // 测试用例1：0值
