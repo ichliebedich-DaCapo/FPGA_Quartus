@@ -1,5 +1,4 @@
 Info: Start Nativelink Simulation process
-Info: NativeLink has detected Verilog design -- Verilog simulation models will be used
 
 ========= EDA Simulation Settings =====================
 
@@ -8,7 +7,7 @@ Family                :  cycloneive
 Quartus root          :  e:/tools/develop/embedded/intelfpga/quartus/bin64/
 Quartus sim root      :  e:/tools/develop/embedded/intelfpga/quartus/eda/sim_lib
 Simulation Tool       :  modelsim-altera
-Simulation Language   :  verilog
+Simulation Language   :  systemverilog
 Simulation Mode       :  GUI
 Sim Output File       :  
 Sim SDF file          :  
@@ -18,6 +17,6 @@ Sim dir               :  simulation\modelsim
 
 Info: Starting NativeLink simulation with ModelSim-Altera software
 Sourced NativeLink script e:/tools/develop/embedded/intelfpga/quartus/common/tcl/internal/nativelink/modelsim.tcl
-Warning: File Firefly_run_msim_rtl_verilog.do already exists - backing up current file as Firefly_run_msim_rtl_verilog.do.bak11
+Warning: File Firefly_run_msim_rtl_systemverilog.do already exists - backing up current file as Firefly_run_msim_rtl_systemverilog.do.bak11
 Info: Spawning ModelSim-Altera Simulation software 
 Info: NativeLink simulation flow was successful

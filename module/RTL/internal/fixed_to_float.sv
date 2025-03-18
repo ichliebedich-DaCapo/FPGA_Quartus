@@ -1,71 +1,69 @@
-// 转换为浮点数
 module fixed_to_float #(
     parameter FIXED_WIDTH = 12,
-    parameter EXP_WIDTH = 8,// 指数位宽
+    parameter EXP_WIDTH = 8,    // 指数位宽
     parameter MANT_WIDTH = 23
 )(
     input clk,
-    input areset,       // 异步复位
-    input [FIXED_WIDTH-1:0] a,  // 12位有符号输入
+    input areset,               // 异步复位
+    input signed [FIXED_WIDTH-1:0] a,  // 修正点1：输入端口不能声明为 reg
     output reg [EXP_WIDTH+MANT_WIDTH:0] q  // 单精度浮点输出
 );
 
-// ================== 流水线级定义 ==================
+// ================== 流水线寄存器定义 ==================
 localparam PIPELINE_STAGES = 3;
 
-// 符号处理
+// Stage 1: 符号处理
 reg [FIXED_WIDTH:0] stage1_abs;
 reg stage1_sign;
 
-// 前导零检测
-reg [4:0] stage2_leading_ones;
-reg [FIXED_WIDTH:0] stage2_value;
+// Stage 2: 前导零检测
+reg [4:0] stage2_lz;
+reg [FIXED_WIDTH:0] stage2_abs;
 
-// 指数/尾数计算
+// Stage 3: 指数/尾数计算
 reg [EXP_WIDTH-1:0] stage3_exp;
 reg [MANT_WIDTH-1:0] stage3_mant;
 reg stage3_sign;
-reg [4:0] lz;
-reg [FIXED_WIDTH+MANT_WIDTH:0] shifted;
+reg [FIXED_WIDTH+MANT_WIDTH:0] shifted; // 声明足够宽的移位寄存器
 // ================== 主转换逻辑 ==================
 always @(posedge clk or posedge areset) begin
     if (areset) begin
-        // 流水线复位
         {stage1_abs, stage1_sign} <= 0;
-        {stage2_leading_ones, stage2_value} <= 0;
+        {stage2_lz, stage2_abs} <= 0;
         {stage3_exp, stage3_mant, stage3_sign} <= 0;
     end else begin
-        // Stage 1: 符号处理
+        // Stage 1: 计算绝对值（处理补码）
         stage1_sign <= a[FIXED_WIDTH-1];
-        stage1_abs <= stage1_sign ? 
-            (~{1'b0, a} + 1) :  // 负数取补码
-            {1'b0, a};          // 正数直接扩展
+        if (a[FIXED_WIDTH-1]) begin
+            // 正确计算补码（整个数值部分取反加1）
+            stage1_abs <= {1'b0, (~a + 1)};  // 关键修正
+        end else begin
+            stage1_abs <= {1'b0, a};
+        end
 
         // Stage 2: 前导零检测
-        lz = 0;
+        stage2_abs <= stage1_abs;
+        stage2_lz <= FIXED_WIDTH; // 默认最大值
         for (int i = FIXED_WIDTH; i >= 0; i--) begin
             if (stage1_abs[i]) begin
-                lz = FIXED_WIDTH - i;
+                stage2_lz <= FIXED_WIDTH - i;
                 break;
             end
         end
-        stage2_leading_ones <= lz;
-        stage2_value <= stage1_abs;
 
-        // Stage 3: 指数和尾数计算
-        if (stage2_value == 0) begin
-            // 零值特判
-            stage3_exp <= 8'h00;
-            stage3_mant <= 23'h000000;
-        end else begin
-            // 指数计算（偏移127 + 有效位移）
-            stage3_exp <= 127 + (FIXED_WIDTH - stage2_leading_ones - 1);
-            
-            // 尾数移位对齐（保留23位有效位）
-            shifted = stage2_value << (MANT_WIDTH - (FIXED_WIDTH - stage2_leading_ones));
-            stage3_mant <= shifted[MANT_WIDTH-1:0];
-        end
+        // Stage 3: 计算指数和尾数
         stage3_sign <= stage1_sign;
+        if (stage2_abs == 0) begin
+            stage3_exp <= 0;
+            stage3_mant <= 0;
+        end else begin
+            // 指数计算
+            stage3_exp <= 127 + (FIXED_WIDTH - stage2_lz);
+            
+            // 尾数移位（分步操作解决语法错误）
+            shifted = stage2_abs << (MANT_WIDTH - (FIXED_WIDTH - stage2_lz));
+            stage3_mant <= shifted[MANT_WIDTH-1:0]; // 正确截取尾数
+        end
     end
 end
 

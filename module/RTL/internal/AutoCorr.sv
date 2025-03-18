@@ -11,7 +11,7 @@ module AutoCorr #(
 );
 
 // ================= 跨时钟域处理 =================
-reg [DATA_WIDTH-1:0] cdc_buffer[0:1];
+reg signed[DATA_WIDTH-1:0] cdc_buffer[0:1];
 reg adc_clk_dly;
 
 always @(negedge adc_clk) begin
