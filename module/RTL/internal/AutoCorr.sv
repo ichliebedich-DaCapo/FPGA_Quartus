@@ -1,6 +1,6 @@
 // 自相关计算模块，用于检测1024个数据的周期，采用无独立缓冲区的实时自相关架构，只需大小为512的必要缓冲区
 module AutoCorr #(
-    parameter DATA_WIDTH = 12,  // 数据位宽
+    parameter DATA_WIDTH = 12  // 数据位宽
 )(
     input clk,                  // 200MHz主时钟
     input adc_clk,              // 10MHzADC时钟,在下降沿处更新data_in数据

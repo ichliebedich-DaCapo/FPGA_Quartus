@@ -25,7 +25,8 @@ reg [FIXED_WIDTH:0] stage2_value;
 reg [EXP_WIDTH-1:0] stage3_exp;
 reg [MANT_WIDTH-1:0] stage3_mant;
 reg stage3_sign;
-
+reg [4:0] lz;
+reg [FIXED_WIDTH+MANT_WIDTH:0] shifted;
 // ================== 主转换逻辑 ==================
 always @(posedge clk or posedge areset) begin
     if (areset) begin
@@ -41,7 +42,7 @@ always @(posedge clk or posedge areset) begin
             {1'b0, a};          // 正数直接扩展
 
         // Stage 2: 前导零检测
-        reg [4:0] lz = 0;
+        lz = 0;
         for (int i = FIXED_WIDTH; i >= 0; i--) begin
             if (stage1_abs[i]) begin
                 lz = FIXED_WIDTH - i;
@@ -61,8 +62,7 @@ always @(posedge clk or posedge areset) begin
             stage3_exp <= 127 + (FIXED_WIDTH - stage2_leading_ones - 1);
             
             // 尾数移位对齐（保留23位有效位）
-            reg [FIXED_WIDTH+MANT_WIDTH:0] shifted = 
-                stage2_value << (MANT_WIDTH - (FIXED_WIDTH - stage2_leading_ones));
+            shifted = stage2_value << (MANT_WIDTH - (FIXED_WIDTH - stage2_leading_ones));
             stage3_mant <= shifted[MANT_WIDTH-1:0];
         end
         stage3_sign <= stage1_sign;
