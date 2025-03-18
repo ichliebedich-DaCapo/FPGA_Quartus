@@ -8,7 +8,7 @@ module AutoCorr #(
     input en,                   // 高电平说明去直流数据有效，连接至去直流模块 DC_Removal.en
     input reg signed [DATA_WIDTH-1:0] data_in, // 来自去直流模块的数据
     output reg [15:0] period,     // 检测周期
-    output stable   // 高电平为稳定
+    output reg stable   // 高电平为稳定
 );
 
 // ===========跨时钟域同步=============
@@ -36,31 +36,39 @@ reg [9:0] wr_ptr;
 reg signed [31:0] corr_values [0:MAX_TAU-1];
 reg signed [33:0] calc,variance,avg;
 
-reg [1:0] state;
-
 // 稳定检测
 reg [15:0] history[0:2];
 reg [1:0] hist_ptr;
+reg [31:0] max_val;
+reg [8:0] peak_idx;
+
+typedef enum logic [1:0] {
+    IDLE     = 2'b00,
+    CALC     = 2'b01,
+    DETECT   = 2'b10,
+    SAFE     = 2'b11  // 新增安全状态
+} state_t;
+state_t state;
 
 // ============状态机=============
 always @(posedge clk) begin
     if(!en_valid) begin
         wr_ptr <= 0;
-        state <= 0;
+        state <= IDLE;
         stable <= 0;
         for(int i=0; i<2*MAX_TAU; i++) window[i] = 0;
         for(int j=0; j<MAX_TAU; j++) corr_values[j] = 0;
     end else begin
         case(state)
-            0: begin
+            IDLE: begin
                 if(adc_clk_falling) begin
                     window[wr_ptr] <= sync_data[2];
                     wr_ptr <= (wr_ptr == 2*MAX_TAU-1) ? 0 : wr_ptr + 1;
-                    state <= 1;
+                    state <= CALC;
                 end
             end
             
-            1: begin
+            CALC: begin
                 for(int i=0; i<MAX_TAU; i++) begin
                     automatic integer idx_new = (wr_ptr - i + 2*MAX_TAU) % (2*MAX_TAU);
                     automatic integer idx_old = (wr_ptr - i - MAX_TAU + 2*MAX_TAU) % (2*MAX_TAU);
@@ -68,12 +76,12 @@ always @(posedge clk) begin
                         window[idx_old] * window[(idx_old + i) % (2*MAX_TAU)];
                     corr_values[i] <= (|calc[33:31]) ? 32'h7FFF_FFFF : calc[31:0];
                 end
-                state <= 2;
+                state <= DETECT;
             end
             
-            2: begin
-                reg [31:0] max_val = 0;
-                reg [8:0] peak_idx = 10; // 最小周期保护
+            DETECT: begin
+                max_val = 0;
+                peak_idx = 10; // 最小周期保护
                 for(int j=10; j<MAX_TAU; j++) begin
                     if(corr_values[j] > max_val) begin
                         max_val = corr_values[j];
@@ -92,12 +100,10 @@ always @(posedge clk) begin
                     stable <= (variance * 100 < avg * 3);
                     period <= avg; // 移除左移
                 end
-                state <= 0;
+                state <= IDLE;
             end
+            default: state <= IDLE;
         endcase
     end
 end
-
-
-
 endmodule
