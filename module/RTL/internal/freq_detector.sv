@@ -1,13 +1,18 @@
 // 【简介】基于过零检测的频率检测模块
-// 【note】过零检测不应有窗口限制
+// 【note】
+//      1，过零检测受窗口限制
+//      2，只需STABLE_CYCLES+2.5个被测信号周期即可判断信号是否稳定，且仅需一个被测信号周期即可判断信号是否不稳定
+//      3，输入数据必须是经去直流处理后的有符号数据
+//      4，rst_n可接其他模块的稳定信号，比如增益程控模块，那么逻辑就是：增益稳定后，再判断频率是否稳定。
 module freq_detector #(
     parameter DATA_WIDTH = 12,        // 输入/输出数据位宽
+    parameter PERIOD_WIDTH =16,        // 周期数据位宽，0~2^16-1足够覆盖任意采样频率了
     parameter STABLE_CYCLES = 3  // 确认周期数，实际上需要STABLE_CYCLES+2.5个周期才能判断周期是否稳定。只需信号的一个周期即可判断信号是否不稳定。
 )(
     input               adc_clk,     // ADC时钟域
     input               rst_n,       // 异步复位
     input signed [DATA_WIDTH-1:0] data_in,  // 去直流后的有符号数据
-    output reg [DATA_WIDTH-1:0] period,     // 周期数据
+    output reg [PERIOD_WIDTH-1:0] period,     // 周期数据
     output reg          stable              // 频率稳定指示
 );
 
@@ -71,7 +76,7 @@ always @(posedge adc_clk or negedge rst_n) begin
 end
 
 // 周期计算（取两个半周期平均值）
-reg [DATA_WIDTH:0] current_period;
+reg [PERIOD_WIDTH:0] current_period;
 always @(posedge adc_clk or negedge rst_n) begin
     if (!rst_n) begin
         current_period <= 0;
@@ -81,7 +86,7 @@ always @(posedge adc_clk or negedge rst_n) begin
 end
 
 // 修改后的稳定性检测模块
-reg [DATA_WIDTH:0] period_history[0:3];
+reg [PERIOD_WIDTH:0] period_history[0:3];
 reg [$clog2(STABLE_CYCLES)-1:0] stable_flags;
 // 改进的稳定性判断条件
 wire stable_cond1 = (period_history[0] >= period_history[1] - 1) && 
@@ -120,6 +125,5 @@ always @(posedge adc_clk or negedge rst_n) begin
         stable <= (stable_flags >= STABLE_CYCLES);
     end
 end
-
 
 endmodule

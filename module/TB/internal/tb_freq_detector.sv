@@ -101,7 +101,7 @@ begin
         end
         $display("400---> time:%d data:%d", count, data_out);
 
-        for (i=0; i<AVG_WINDOW; i=i+1) begin
+        for (i=0; i<AVG_WINDOW*6; i=i+1) begin
             data_in =  500 * $sin(2 * 3.1416*i/256);
             @(posedge clk);
         end
