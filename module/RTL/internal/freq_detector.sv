@@ -1,7 +1,8 @@
 // 【简介】基于过零检测的频率检测模块
 // 【note】过零检测不应有窗口限制
 module freq_detector #(
-    parameter DATA_WIDTH = 12        // 输入/输出数据位宽
+    parameter DATA_WIDTH = 12,        // 输入/输出数据位宽
+    parameter STABLE_CYCLES = 3  // 新增稳定确认周期数
 )(
     input               adc_clk,     // ADC时钟域
     input               rst_n,       // 异步复位
@@ -79,31 +80,46 @@ always @(posedge adc_clk or negedge rst_n) begin
     end
 end
 
-// 稳定性检测（窗口比较）
+// 修改后的稳定性检测模块
 reg [DATA_WIDTH:0] period_history[0:3];
-integer i;
+reg [1:0] stable_flags;
+        // 改进的稳定性判断条件
+wire stable_cond1 = (period_history[0] >= period_history[1] - 1) && 
+                    (period_history[0] <= period_history[1] + 1);
+wire stable_cond2 = (period_history[1] >= period_history[2] - 1) && 
+                    (period_history[1] <= period_history[2] + 1);
+wire stable_cond3 = (period_history[2] >= period_history[3] - 1) && 
+                    (period_history[2] <= period_history[3] + 1);
 always @(posedge adc_clk or negedge rst_n) begin
     if (!rst_n) begin
-        for (i=0; i<4; i=i+1)
-            period_history[i] <= 0;
         period <= 0;
         stable <= 0;
-    end else begin
-        // 滑动窗口更新
-        if (|current_period) begin
-            period_history[0] <= current_period;
-            for (i=3; i>0; i=i-1)
-                period_history[i] <= period_history[i-1];
-        end
+        period_history[0] <= 0;
+        period_history[1] <= 0;
+        period_history[2] <= 0;
+        period_history[3] <= 0;
+        stable_flags <= 0;
+    end else if (|current_period) begin
+        // 滑动窗口更新优化
+        period_history[3] <= period_history[2];
+        period_history[2] <= period_history[1];
+        period_history[1] <= period_history[0];
+        period_history[0] <= current_period;
         
-        // 周期输出取中间值
+        // 中间值输出保持稳定
         period <= (period_history[1] + period_history[2]) >> 1;
         
-        // 稳定性判断（连续3个周期波动小于5%）
-        stable <= ((period_history[3] > period_history[2]*95/100) &&
-                  (period_history[3] < period_history[2]*105/100) &&
-                  (period_history[2] > period_history[1]*95/100) &&
-                  (period_history[2] < period_history[1]*105/100));
+
+        
+        // 稳定性标志累加器
+        if (stable_cond1 && stable_cond2 && stable_cond3) begin
+            stable_flags <= (stable_flags == 2'b11) ? 2'b11 : stable_flags + 1;
+        end else begin
+            stable_flags <= 0;
+        end
+        
+        // 稳定信号输出
+        stable <= (stable_flags >= (STABLE_CYCLES-1));
     end
 end
 
