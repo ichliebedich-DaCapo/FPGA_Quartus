@@ -40,7 +40,7 @@ parameter AVG_WINDOW = 1024; // 必须为2的幂次
 // 信号声明
 reg stable;
 reg signed[DATA_WIDTH-1:0] data_in;
-reg  [DATA_WIDTH:0] data_out;
+reg  [DATA_WIDTH-1:0] data_out;
 
 
 // 实例化被测模块
@@ -81,19 +81,19 @@ begin
     integer i;
     begin
         // 1024
-        for (i=0; i<AVG_WINDOW*2; i=i+1) begin
+        for (i=0; i<AVG_WINDOW*4; i=i+1) begin
             data_in =  500 * $sin(2 * 3.1416*i/1024);
             @(posedge clk);
         end
         $display("1024---> time:%d data:%d ", count, data_out);
 
-        for (i=0; i<AVG_WINDOW; i=i+1) begin
+        for (i=0; i<AVG_WINDOW*3; i=i+1) begin
             data_in =  500 * $sin(2 * 3.1416*i/512);
             @(posedge clk);
         end
         $display("512---> time:%d data:%d", count, data_out);
 
-        for (i=0; i<AVG_WINDOW; i=i+1) begin
+        for (i=0; i<AVG_WINDOW*5; i=i+1) begin
             data_in =  500 * $sin(2 * 3.1416*i/400);
             @(posedge clk);
         end

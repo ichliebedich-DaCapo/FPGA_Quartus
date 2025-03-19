@@ -10,69 +10,100 @@ module freq_detector #(
     output reg          stable              // 频率稳定指示
 );
 
-// 流水线阶段控制信号
-reg [2:0] stage;
+// 信号定义
+reg signed [DATA_WIDTH-1:0] data_prev[0:1];
+wire zero_cross = (data_prev[1][DATA_WIDTH-1] ^ data_in[DATA_WIDTH-1]);
+wire direction = data_prev[1] > data_in;
 
-// 输入数据寄存（阶段1）
-reg signed [DATA_WIDTH-1:0] data_prev;
-always @(posedge adc_clk or negedge rst_n)
-    if (!rst_n) data_prev <= 0;
-    else        data_prev <= data_in;
+// 三级流水线寄存
+always @(posedge adc_clk or negedge rst_n) begin
+    if (!rst_n) begin
+        data_prev[0] <= 0;
+        data_prev[1] <= 0;
+    end else begin
+        data_prev[0] <= data_in;
+        data_prev[1] <= data_prev[0];
+    end
+end
 
-// 过零检测（阶段2）
-wire zero_cross = (data_prev[DATA_WIDTH-1] ^ data_in[DATA_WIDTH-1]);
-wire direction = data_prev > data_in; // 1: 正到负，0: 负到正
+// 有效过零检测（添加滤波）
+reg [2:0] cross_filter;
+always @(posedge adc_clk or negedge rst_n) begin
+    if (!rst_n) cross_filter <= 0;
+    else        cross_filter <= {cross_filter[1:0], zero_cross};
+end
 
-// 有效过零事件检测（阶段3）
-reg [1:0] valid_cross_pipe;
-always @(posedge adc_clk or negedge rst_n)
-    if (!rst_n) valid_cross_pipe <= 2'b00;
-    else        valid_cross_pipe <= {valid_cross_pipe[0], zero_cross};
+wire valid_cross = (cross_filter[2:1] == 2'b11); // 持续两周期高电平
 
-wire valid_cross = valid_cross_pipe[1];
-
-// 周期计数器（阶段4）
-reg [DATA_WIDTH:0] counter;  // 扩展1bit防止溢出
-reg [DATA_WIDTH:0] prev_counter;
-reg last_direction;
+// 周期计数器（带溢出保护）
+reg [DATA_WIDTH:0] pos_counter, neg_counter;
+reg [DATA_WIDTH:0] last_pos, last_neg;
+reg cross_valid;
 
 always @(posedge adc_clk or negedge rst_n) begin
     if (!rst_n) begin
-        counter      <= 0;
-        prev_counter <= 0;
-        last_direction <= 0;
+        pos_counter <= 1;
+        neg_counter <= 1;
+        last_pos <= 0;
+        last_neg <= 0;
+        cross_valid <= 0;
     end else begin
-        if (valid_cross) begin
-            // 方向交替时更新周期
-            if (direction != last_direction) begin
-                prev_counter <= counter;
-                counter      <= 0;
-                last_direction <= direction;
-            end
+        // 计数器递增
+        pos_counter <= pos_counter + 1;
+        neg_counter <= neg_counter + 1;
+        
+        // 正过零检测
+        if (valid_cross && direction) begin
+            last_pos <= pos_counter;
+            pos_counter <= 1;
+            cross_valid <= 1;
+        end 
+        // 负过零检测
+        else if (valid_cross && !direction) begin
+            last_neg <= neg_counter;
+            neg_counter <= 1;
+            cross_valid <= 1;
         end else begin
-            counter <= counter + 1;
+            cross_valid <= 0;
         end
     end
 end
 
-// 周期计算（阶段5）
-reg [DATA_WIDTH:0] period_temp;
-always @(posedge adc_clk or negedge rst_n)
-    if (!rst_n) period_temp <= 0;
-    else if (valid_cross)
-        period_temp <= prev_counter + counter;
-
-// 稳定性检测（阶段6）
-reg [DATA_WIDTH:0] prev_period;
+// 周期计算（取两个半周期平均值）
+reg [DATA_WIDTH:0] current_period;
 always @(posedge adc_clk or negedge rst_n) begin
     if (!rst_n) begin
-        period    <= 0;
-        prev_period <= 0;
-        stable    <= 0;
-    end else if (valid_cross) begin
-        period    <= period_temp[DATA_WIDTH-1:0];
-        prev_period <= period;
-        stable    <= (period_temp == {prev_period, 1'b0});
+        current_period <= 0;
+    end else if (cross_valid) begin
+        current_period <= (last_pos + last_neg) >> 1;
+    end
+end
+
+// 稳定性检测（窗口比较）
+reg [DATA_WIDTH:0] period_history[0:3];
+integer i;
+always @(posedge adc_clk or negedge rst_n) begin
+    if (!rst_n) begin
+        for (i=0; i<4; i=i+1)
+            period_history[i] <= 0;
+        period <= 0;
+        stable <= 0;
+    end else begin
+        // 滑动窗口更新
+        if (|current_period) begin
+            period_history[0] <= current_period;
+            for (i=3; i>0; i=i-1)
+                period_history[i] <= period_history[i-1];
+        end
+        
+        // 周期输出取中间值
+        period <= (period_history[1] + period_history[2]) >> 1;
+        
+        // 稳定性判断（连续3个周期波动小于5%）
+        stable <= ((period_history[3] > period_history[2]*95/100) &&
+                  (period_history[3] < period_history[2]*105/100) &&
+                  (period_history[2] > period_history[1]*95/100) &&
+                  (period_history[2] < period_history[1]*105/100));
     end
 end
 
