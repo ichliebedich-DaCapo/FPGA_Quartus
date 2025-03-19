@@ -49,7 +49,7 @@ freq_detector dut (
     .rst_n(rst_n),
     .stable(stable),
     .data_in(data_in),
-    .period(data_out)
+    .period(data_out),
 );
 
 
@@ -64,6 +64,7 @@ initial begin
 
 
     // 开始测试
+    $display("\n=== start:%d ===\n",$time);
     test_1();
     #10;
     test_2();
@@ -85,25 +86,25 @@ begin
             data_in =  500 * $sin(2 * 3.1416*i/1024);
             @(posedge clk);
         end
-        $display("1024---> time:%d data:%d ", count, data_out);
+        $display("time:%d data:%d ", count, data_out);
 
         for (i=0; i<AVG_WINDOW; i=i+1) begin
             data_in =  500 * $sin(2 * 3.1416*i/512);
             @(posedge clk);
         end
-        $display("512---> time:%d data:%d", count, data_out);
+        $display("time:%d data:%d", count, data_out);
 
         for (i=0; i<AVG_WINDOW; i=i+1) begin
             data_in =  500 * $sin(2 * 3.1416*i/400);
             @(posedge clk);
         end
-        $display("400---> time:%d data:%d", count, data_out);
+        $display("time:%d data:%d", count, data_out);
 
         for (i=0; i<AVG_WINDOW; i=i+1) begin
             data_in =  500 * $sin(2 * 3.1416*i/256);
             @(posedge clk);
         end
-        $display("256---> time:%d data:%d", count, data_out);
+        $display("time:%d data:%d", count, data_out);
         
     end
 
