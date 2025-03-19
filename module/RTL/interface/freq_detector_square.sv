@@ -49,7 +49,6 @@ wire [COUNTER_WIDTH-1:0] h3 = history[3];
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n)begin
         period <= 0;
-        stable <= 0;
         history[0] <= 0;
         history[1] <= 0;
         history[2] <= 0;
@@ -61,7 +60,6 @@ always @(posedge clk or negedge rst_n) begin
         history[3] <= history[2];
     end else begin
         period <= (history[1] + history[2]) >> 1;
-        stable <= (stable_cnt >= STABLE_CYCLES);
     end
 end
 
@@ -81,6 +79,8 @@ always @(posedge clk) begin
     diff_ok[2] <= h2_down && h2_up;
 end
 
+
+
 wire all_diff_ok = &diff_ok;
 
 // 稳定计数器优化（专用加法器）
@@ -94,4 +94,11 @@ always @(posedge clk) begin
         endcase
     end
 end
+
+// 稳定信号输出（寄存器输出）
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) stable <= 0;
+    else stable <= (stable_cnt >= STABLE_CYCLES);
+end
+
 endmodule
