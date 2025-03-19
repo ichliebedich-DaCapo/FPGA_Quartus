@@ -28,12 +28,14 @@ end
 // ================= FFT配置参数 =================
 localparam FFT_LENGTH = 1024;
 localparam FFT_DW = 32;  // 单精度浮点位宽
+logic float_stable;
 
 // ================= 浮点转换模块 =================
 wire [FFT_DW-1:0] float_data;
 fixed_to_float u_convert (
     .clk    (clk),
-    .areset (1'b0),
+    .rst_n (rst_n),
+    .en     (float_stable),
     .a      (cdc_buffer[1]),
     .q      (float_data)
 );

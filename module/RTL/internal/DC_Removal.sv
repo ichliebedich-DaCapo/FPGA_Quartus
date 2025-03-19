@@ -20,7 +20,7 @@ reg [DATA_WIDTH:0] avg_reg = 0;
 reg [9:0] counter = 0;
 wire signed [DATA_WIDTH:0] signed_data = {1'b0, data_in}; // 无符号转有符号
 
-always_ff @(negedge adc_clk or negedge stable) begin
+always_ff @(posedge adc_clk or negedge stable) begin
     if (!stable) begin
         sum <= 0;
         counter <= 0;
