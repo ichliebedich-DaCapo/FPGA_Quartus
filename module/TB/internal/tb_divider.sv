@@ -1,5 +1,5 @@
 `timescale 1ns/1ps  // 时间单位=1ns，时间精度=1ps   锁相环模块添加这个，所以这里也必须添加
-module tb_divider_10;
+module tb_divider;
 
 // =========================================时钟周期定义======================================
 parameter                           CLK_PERIOD                = 1    ;  // 10ns时钟周期
@@ -26,14 +26,14 @@ end
 // =========================================时钟周期定义======================================
 logic reset;
 // 信号定义
-logic [2:0] div;
+logic [11:0] div;
 logic ADC_CLK;
 
 
 
 // **************用于测试*****************
 // 被测模块实例化
-divider_10 uut(
+divider uut(
     .clk(clk),
     .rst_n(reset),
     .div(div),
@@ -51,13 +51,14 @@ initial begin
     reset = 1'b0;#5;
     reset = 1'b1;#5;
 
+    #100;
+    div = 1;
+    #100;
+    div=10;
+    #1000;
+    div = 20;
+    #1000;
 
-    // 开始测试
-    $display("\n=== start:%d ===\n",$time);
-    test_1();
-    #10;
-    test_2();
-    #10;
 
 
     // 结束仿真 
