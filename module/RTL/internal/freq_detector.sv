@@ -4,10 +4,12 @@
 //      2，只需STABLE_CYCLES+2.5个被测信号周期即可判断信号是否稳定，且仅需一个被测信号周期即可判断信号是否不稳定
 //      3，输入数据必须是经去直流处理后的有符号数据
 //      4，rst_n可接其他模块的稳定信号，比如增益程控模块，那么逻辑就是：增益稳定后，再判断频率是否稳定。
+// 【新增】方向检测采用三次采样滤波，消除噪声干扰
 module freq_detector #(
     parameter DATA_WIDTH = 12,        // 输入/输出数据位宽
     parameter PERIOD_WIDTH =16,        // 周期数据位宽，0~2^16-1足够覆盖任意采样频率了
-    parameter STABLE_CYCLES = 3  // 确认周期数，实际上需要STABLE_CYCLES+2.5个周期才能判断周期是否稳定。只需信号的一个周期即可判断信号是否不稳定。
+    parameter STABLE_CYCLES = 3,  // 确认周期数，实际上需要STABLE_CYCLES+2.5个周期才能判断周期是否稳定。只需信号的一个周期即可判断信号是否不稳定。
+    parameter STABLE_TOL = 2        // 新增：周期稳定性容差范围
 )(
     input               adc_clk,     // ADC时钟域
     input               rst_n,       // 异步复位
@@ -19,7 +21,10 @@ module freq_detector #(
 // 信号定义
 reg signed [DATA_WIDTH-1:0] data_prev[0:1];
 wire zero_cross = (data_prev[1][DATA_WIDTH-1] ^ data_in[DATA_WIDTH-1]);
-wire direction = data_prev[1] > data_in;
+
+// 方向检测滤波：三次采样后多数表决确定方向
+wire direction_raw = data_prev[1] > data_in; // 原始方向信号
+reg [2:0] dir_filter; // 方向滤波寄存器
 
 // 三级流水线寄存
 always @(posedge adc_clk or negedge rst_n) begin
@@ -32,13 +37,21 @@ always @(posedge adc_clk or negedge rst_n) begin
     end
 end
 
-// 有效过零检测（添加滤波）
+// 方向滤波处理（新增）
+always @(posedge adc_clk or negedge rst_n) begin
+    if (!rst_n) dir_filter <= 0;
+    else        dir_filter <= {dir_filter[1:0], direction_raw};
+end
+
+// 多数表决逻辑：连续三次采样中至少两次相同才确认方向
+wire filtered_direction = (dir_filter[0] + dir_filter[1] + dir_filter[2]) >= 2; 
+
+// 有效过零检测（维持原有滤波）
 reg [2:0] cross_filter;
 always @(posedge adc_clk or negedge rst_n) begin
     if (!rst_n) cross_filter <= 0;
     else        cross_filter <= {cross_filter[1:0], zero_cross};
 end
-
 wire valid_cross = (cross_filter[2:1] == 2'b11); // 持续两周期高电平
 
 // 周期计数器（带溢出保护）
@@ -58,14 +71,14 @@ always @(posedge adc_clk or negedge rst_n) begin
         pos_counter <= pos_counter + 1;
         neg_counter <= neg_counter + 1;
         
-        // 正过零检测
-        if (valid_cross && direction) begin
+        // 正过零检测（使用滤波后方向）
+        if (valid_cross && filtered_direction) begin
             last_pos <= pos_counter;
             pos_counter <= 1;
             cross_valid <= 1;
         end 
-        // 负过零检测
-        else if (valid_cross && !direction) begin
+        // 负过零检测（使用滤波后方向）
+        else if (valid_cross && !filtered_direction) begin
             last_neg <= neg_counter;
             neg_counter <= 1;
             cross_valid <= 1;
@@ -85,16 +98,17 @@ always @(posedge adc_clk or negedge rst_n) begin
     end
 end
 
-// 修改后的稳定性检测模块
+// 稳定性检测模块（维持原有逻辑）
 reg [PERIOD_WIDTH:0] period_history[0:3];
 reg [$clog2(STABLE_CYCLES)-1:0] stable_flags;
-// 改进的稳定性判断条件
-wire stable_cond1 = (period_history[0] >= period_history[1] - 1) && 
-                    (period_history[0] <= period_history[1] + 1);
-wire stable_cond2 = (period_history[1] >= period_history[2] - 1) && 
-                    (period_history[1] <= period_history[2] + 1);
-wire stable_cond3 = (period_history[2] >= period_history[3] - 1) && 
-                    (period_history[2] <= period_history[3] + 1);
+
+wire stable_cond1 = (period_history[0] >= period_history[1] - STABLE_TOL) && 
+                    (period_history[0] <= period_history[1] + STABLE_TOL);
+wire stable_cond2 = (period_history[1] >= period_history[2] - STABLE_TOL) && 
+                    (period_history[1] <= period_history[2] + STABLE_TOL);
+wire stable_cond3 = (period_history[2] >= period_history[3] - STABLE_TOL) && 
+                    (period_history[2] <= period_history[3] + STABLE_TOL);
+
 always @(posedge adc_clk or negedge rst_n) begin
     if (!rst_n) begin
         period <= 0;

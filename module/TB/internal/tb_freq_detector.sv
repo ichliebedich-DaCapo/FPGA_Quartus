@@ -83,7 +83,7 @@ begin
     integer i;
     begin
         // 1024
-        for (i=0; i<AVG_WINDOW*4; i=i+1) begin
+        for (i=0; i<AVG_WINDOW*6; i=i+1) begin
             data_in =  500 * $sin(2 * 3.1416*i/1024);
             @(posedge clk);
         end
