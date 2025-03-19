@@ -1,5 +1,5 @@
 // 【简介】：基于电压比较器的频率检测模块
-// 【Fmax】：240MHz
+// 【Fmax】：246MHz
 // 【note】：输入信号为1K~100K，考虑到信号并不是很高，如果使用等精度测量法会有相当大的延迟，于是使用了周期测量法。
 //  并且由于Fmax达到200MHz以上，那么这个模块可以很轻松地连接上200MHz的时钟。
 module freq_detector_square #(
@@ -29,8 +29,11 @@ end
 // 周期计数器（优化位宽减少逻辑延迟）
 reg [COUNTER_WIDTH-1:0] cycle_cnt;
 reg [COUNTER_WIDTH-1:0] captured_cycle;
-always @(posedge clk) begin
-    if (signal_posedge) begin
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        cycle_cnt <= 0;
+        captured_cycle <= 0;
+    end else if (signal_posedge) begin
         captured_cycle <= cycle_cnt + 1; // 补偿计数+1
         cycle_cnt <= 0;
     end else begin
@@ -85,8 +88,10 @@ wire all_diff_ok = &diff_ok;
 
 // 稳定计数器优化（专用加法器）
 reg [$clog2(STABLE_CYCLES+1)-1:0] stable_cnt;
-always @(posedge clk) begin
-    if (signal_posedge) begin
+always @(posedge clk or negedge rst_n) begin
+    if(!rst_n)begin
+        stable_cnt <= 0;
+    end else if (signal_posedge) begin
         case ({all_diff_ok, (stable_cnt < STABLE_CYCLES)})
             2'b11: stable_cnt <= stable_cnt + 1'b1;
             2'b10: stable_cnt <= STABLE_CYCLES;
