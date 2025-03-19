@@ -2,7 +2,7 @@
 // 【note】过零检测不应有窗口限制
 module freq_detector #(
     parameter DATA_WIDTH = 12,        // 输入/输出数据位宽
-    parameter STABLE_CYCLES = 3  // 新增稳定确认周期数
+    parameter STABLE_CYCLES = 3  // 确认周期数，实际上需要STABLE_CYCLES+2.5个周期才能判断周期是否稳定。只需信号的一个周期即可判断信号是否不稳定。
 )(
     input               adc_clk,     // ADC时钟域
     input               rst_n,       // 异步复位
@@ -82,8 +82,8 @@ end
 
 // 修改后的稳定性检测模块
 reg [DATA_WIDTH:0] period_history[0:3];
-reg [1:0] stable_flags;
-        // 改进的稳定性判断条件
+reg [$clog2(STABLE_CYCLES)-1:0] stable_flags;
+// 改进的稳定性判断条件
 wire stable_cond1 = (period_history[0] >= period_history[1] - 1) && 
                     (period_history[0] <= period_history[1] + 1);
 wire stable_cond2 = (period_history[1] >= period_history[2] - 1) && 
@@ -99,7 +99,7 @@ always @(posedge adc_clk or negedge rst_n) begin
         period_history[2] <= 0;
         period_history[3] <= 0;
         stable_flags <= 0;
-    end else if (|current_period) begin
+    end else if (cross_valid) begin
         // 滑动窗口更新优化
         period_history[3] <= period_history[2];
         period_history[2] <= period_history[1];
@@ -109,18 +109,17 @@ always @(posedge adc_clk or negedge rst_n) begin
         // 中间值输出保持稳定
         period <= (period_history[1] + period_history[2]) >> 1;
         
-
-        
         // 稳定性标志累加器
         if (stable_cond1 && stable_cond2 && stable_cond3) begin
-            stable_flags <= (stable_flags == 2'b11) ? 2'b11 : stable_flags + 1;
+            stable_flags <= (stable_flags == STABLE_CYCLES) ? STABLE_CYCLES : stable_flags + 1;
         end else begin
             stable_flags <= 0;
         end
         
         // 稳定信号输出
-        stable <= (stable_flags >= (STABLE_CYCLES-1));
+        stable <= (stable_flags >= STABLE_CYCLES);
     end
 end
+
 
 endmodule

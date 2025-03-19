@@ -44,7 +44,9 @@ reg  [DATA_WIDTH-1:0] data_out;
 
 
 // 实例化被测模块
-freq_detector dut (
+freq_detector #(
+    .STABLE_CYCLES(3)
+)dut (
     .adc_clk(clk),
     .rst_n(rst_n),
     .stable(stable),
