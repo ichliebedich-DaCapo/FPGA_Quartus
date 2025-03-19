@@ -38,7 +38,7 @@
 
 set_global_assignment -name FAMILY "Cyclone IV E"
 set_global_assignment -name DEVICE EP4CE6E22C8
-set_global_assignment -name TOP_LEVEL_ENTITY AutoCorr
+set_global_assignment -name TOP_LEVEL_ENTITY freq_detector
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 18.0.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "16:02:24  DECEMBER 28, 2024"
 set_global_assignment -name LAST_QUARTUS_VERSION "18.0.0 Standard Edition"
@@ -112,20 +112,6 @@ set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_AutoCorr -section_id t
 set_global_assignment -name EDA_TEST_BENCH_NAME tb_fixed_to_float -section_id eda_simulation
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id tb_fixed_to_float
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_fixed_to_float -section_id tb_fixed_to_float
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/float_to_fixed.sv
-set_global_assignment -name QIP_FILE IP/IFFT_1024/ifft_1024/synthesis/ifft_1024.qip
-set_global_assignment -name QIP_FILE IP/FFT_1024/fft_1024/synthesis/fft_1024.qip
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/fixed_to_float.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/AutoCorr.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/DC_Removal.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/submodule/adc_data_control.sv
-set_global_assignment -name SDC_FILE program/SDMA/sdma.sdc
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/auto_gain_control.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/adc_interface.sv
-set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/divider_10.sv
-set_global_assignment -name QIP_FILE IP/PLL/my_pll.qip
-set_global_assignment -name QIP_FILE IP/FIFO/async_fifo.qip
-set_global_assignment -name QIP_FILE IP/FIFO_1024/async_fifo_1024.qip
 set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/fsmc_interface_tb.sv -section_id fsmc_interface_tb
 set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/test_reg_tb.sv -section_id test_reg_tb
 set_global_assignment -name EDA_TEST_BENCH_FILE program/test/tb_test.sv -section_id tb_test
@@ -138,6 +124,19 @@ set_global_assignment -name EDA_TEST_BENCH_NAME tb_float_to_fixed -section_id ed
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id tb_float_to_fixed
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_float_to_fixed -section_id tb_float_to_fixed
 set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_float_to_fixed.sv -section_id tb_float_to_fixed
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/freq_detector.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/float_to_fixed.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/fixed_to_float.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/AutoCorr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/DC_Removal.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/submodule/adc_data_control.sv
+set_global_assignment -name SDC_FILE program/SDMA/sdma.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/auto_gain_control.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/adc_interface.sv
+set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/internal/divider_10.sv
+set_global_assignment -name QIP_FILE IP/PLL/my_pll.qip
+set_global_assignment -name QIP_FILE IP/FIFO/async_fifo.qip
+set_global_assignment -name QIP_FILE IP/FIFO_1024/async_fifo_1024.qip
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top

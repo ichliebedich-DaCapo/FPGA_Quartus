@@ -1,85 +1,79 @@
-// 基于过零检测的频率检测模块
+// 【简介】基于过零检测的频率检测模块
+// 【note】过零检测不应有窗口限制
 module freq_detector #(
-    parameter DATA_WIDTH = 12,       // 输入/输出数据位宽
-    parameter WINDOW = 1024,         // 平均窗口大小,必须为2的幂次
-    parameter TOLERANCE = 2          // 周期稳定性容差
+    parameter DATA_WIDTH = 12        // 输入/输出数据位宽
 )(
-    input               adc_clk,            // ADC时钟域
-    input               rst_n,              // 异步复位
+    input               adc_clk,     // ADC时钟域
+    input               rst_n,       // 异步复位
     input signed [DATA_WIDTH-1:0] data_in,  // 去直流后的有符号数据
     output reg [DATA_WIDTH-1:0] period,     // 周期数据
     output reg          stable              // 频率稳定指示
 );
 
-    reg signed [DATA_WIDTH-1:0] data_in_prev; // 延迟一拍的输入数据
-    wire zero_cross;                         // 过零检测信号
-    reg [9:0] window_counter;                // 窗口计数器（0~1023）
-    reg [10:0] zc_counter;                   // 过零计数器（最大1024次）
-    reg [10:0] zc_count_stored;              // 存储窗口内的过零次数
-    reg [DATA_WIDTH-1:0] prev_period;        // 前一周期的值
-    reg window_done;                         // 窗口结束标志（延迟一拍）
-    localparam DIV_SCALE = 16;               // 除法精度扩展
-    reg [DATA_WIDTH+DIV_SCALE-1:0] period_scaled; // 扩展精度周期计算
+// 流水线阶段控制信号
+reg [2:0] stage;
 
-    // 过零检测：符号位不同表示过零点
-    always @(posedge adc_clk or negedge rst_n) begin
-        if (!rst_n) data_in_prev <= 0;
-        else        data_in_prev <= data_in;
-    end
-    assign zero_cross = (data_in_prev[DATA_WIDTH-1] != data_in[DATA_WIDTH-1]);
+// 输入数据寄存（阶段1）
+reg signed [DATA_WIDTH-1:0] data_prev;
+always @(posedge adc_clk or negedge rst_n)
+    if (!rst_n) data_prev <= 0;
+    else        data_prev <= data_in;
 
-    // 窗口计数与过零统计（含边界过零）
-    always @(posedge adc_clk or negedge rst_n) begin
-        if (!rst_n) begin
-            window_counter <= 0;
-            zc_counter <= 0;
-            zc_count_stored <= 0;
+// 过零检测（阶段2）
+wire zero_cross = (data_prev[DATA_WIDTH-1] ^ data_in[DATA_WIDTH-1]);
+wire direction = data_prev > data_in; // 1: 正到负，0: 负到正
+
+// 有效过零事件检测（阶段3）
+reg [1:0] valid_cross_pipe;
+always @(posedge adc_clk or negedge rst_n)
+    if (!rst_n) valid_cross_pipe <= 2'b00;
+    else        valid_cross_pipe <= {valid_cross_pipe[0], zero_cross};
+
+wire valid_cross = valid_cross_pipe[1];
+
+// 周期计数器（阶段4）
+reg [DATA_WIDTH:0] counter;  // 扩展1bit防止溢出
+reg [DATA_WIDTH:0] prev_counter;
+reg last_direction;
+
+always @(posedge adc_clk or negedge rst_n) begin
+    if (!rst_n) begin
+        counter      <= 0;
+        prev_counter <= 0;
+        last_direction <= 0;
+    end else begin
+        if (valid_cross) begin
+            // 方向交替时更新周期
+            if (direction != last_direction) begin
+                prev_counter <= counter;
+                counter      <= 0;
+                last_direction <= direction;
+            end
         end else begin
-            window_counter <= (window_counter == WINDOW - 1) ? 0 : window_counter + 1;
-
-            if (zero_cross) begin
-                zc_counter <= zc_counter + 1;
-            end
-
-            if (window_counter == WINDOW - 1) begin
-                zc_count_stored <= zc_counter + (zero_cross ? 1 : 0);
-                zc_counter <= 0;
-            end
+            counter <= counter + 1;
         end
     end
+end
 
-    // 高精度周期计算（定点数近似）
-    always @(posedge adc_clk or negedge rst_n) begin
-        if (!rst_n) begin
-            period <= 0;
-            period_scaled <= 0;
-        end else begin
-            if (zc_count_stored == 0) begin
-                period <= 0; // 处理无过零情况
-            end else begin
-                period_scaled <= (WINDOW * 2 * (2**DIV_SCALE)) / zc_count_stored;
-                period <= period_scaled[DIV_SCALE +: DATA_WIDTH]; // 截取整数部分
-            end
-        end
-    end
+// 周期计算（阶段5）
+reg [DATA_WIDTH:0] period_temp;
+always @(posedge adc_clk or negedge rst_n)
+    if (!rst_n) period_temp <= 0;
+    else if (valid_cross)
+        period_temp <= prev_counter + counter;
 
-    // 窗口结束标志
-    always @(posedge adc_clk or negedge rst_n) begin
-        if (!rst_n) window_done <= 0;
-        else        window_done <= (window_counter == WINDOW - 1);
+// 稳定性检测（阶段6）
+reg [DATA_WIDTH:0] prev_period;
+always @(posedge adc_clk or negedge rst_n) begin
+    if (!rst_n) begin
+        period    <= 0;
+        prev_period <= 0;
+        stable    <= 0;
+    end else if (valid_cross) begin
+        period    <= period_temp[DATA_WIDTH-1:0];
+        prev_period <= period;
+        stable    <= (period_temp == {prev_period, 1'b0});
     end
-
-    // 带容差的稳定性判断
-    always @(posedge adc_clk or negedge rst_n) begin
-        if (!rst_n) begin
-            stable <= 0;
-            prev_period <= 0;
-        end else if (window_done) begin
-            stable <= ((period >= prev_period - TOLERANCE) && 
-                      (period <= prev_period + TOLERANCE)) || 
-                      (period == prev_period);
-            prev_period <= period;
-        end
-    end
+end
 
 endmodule
