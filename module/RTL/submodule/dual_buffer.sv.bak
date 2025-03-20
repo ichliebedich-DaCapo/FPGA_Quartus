@@ -59,10 +59,10 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
+    if (!rst_n) 
         adc_data_sync <= 12'b0;
         sync_signal_in  <= 2'b0;
-    end else if (adc_clk_rising) begin// 仅在adc_clk上升沿采样
+    else if (adc_clk_rising) begin// 仅在adc_clk上升沿采样
         adc_data_sync <= adc_data;
         sync_signal_in  <= {sync_signal_in[0], signal_in};
     end
@@ -77,14 +77,14 @@ always @(posedge clk or negedge rst_n) begin
     end else begin
         case (current_state)
             IDLE: begin
-                if (sync_stable[1] && signal_rise && !reg_read) begin
+                if (sync_stable[2] && signal_rise && !reg_read) begin
                     current_state <= SAMPLING;
                     write_ptr     <= 0;
                 end
             end
 
             SAMPLING: begin
-                if (!sync_stable[1]) begin  // stable变低则终止
+                if (!sync_stable[2]) begin  // stable变低则终止
                     current_state <= ERROR;
                 end else if (write_ptr == BUF_SIZE-1) begin
                     current_state <= IDLE;
@@ -101,7 +101,7 @@ always @(posedge clk or negedge rst_n) begin
             end
 
             ERROR: begin
-                if (sync_stable[1]) 
+                if (sync_stable[2]) 
                     current_state <= IDLE;
             end
         endcase
