@@ -1,3 +1,6 @@
+// 【简介】：双缓冲子模块
+// 【功能】：根据稳定信号，从ADC读取数据，使用双缓冲机制。同时添加了触发机制，只在电压比较器处于上升沿时开始读取。
+// 【Fmax】：316.66MHz
 module dual_buffer #(
     parameter DATA_WIDTH = 16,    // 数据位宽
     parameter BUF_SIZE   = 1024   // 缓冲区大小（深度）
@@ -9,7 +12,7 @@ module dual_buffer #(
     input  wire                  adc_clk,
     input  wire [11:0]           adc_data,
     input  wire                  stable,
-    input  wire                  signal_in,
+    input  wire                  signal_in,// 接电压比较器的方波信号
     // 外部模块接口
     input  wire                  en,
     input  wire                  state,     // 0=读 1=写
@@ -44,18 +47,17 @@ wire signal_rise = (sync_signal_in[2:1] == 2'b01);
 // ================== 数据写入逻辑（跨时钟域处理） ==================
 reg  [DATA_WIDTH-1:0] adc_data_sync;
 reg [1:0] adc_clk_sync;
-reg  [1:0] adc_sample_en;
 wire adc_clk_rising = (adc_clk_sync[1:0] == 2'b01); // 正确边沿检测
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        adc_sample_en <= 0;
         sync_stable     <= 3'b0;
         sync_signal_in  <= 3'b0;
+        adc_clk_sync <= 2'b0;
     end else begin
-        sync_stable     <= {sync_stable[1:0], stable};
-        sync_signal_in  <= {sync_signal_in[1:0], signal_in};
+        sync_stable     <= {sync_stable[0], stable};
+        sync_signal_in  <= {sync_signal_in[0], signal_in};
         // 检测adc_clk上升沿
-        adc_sample_en <= {adc_sample_en[0], adc_clk};
+        adc_clk_sync <= {adc_clk_sync[0], adc_clk};
     end
 end
 always @(posedge clk or negedge rst_n) begin
@@ -163,16 +165,16 @@ always @(posedge clk or negedge rst_n) begin
 
                 if(addr < BUF_SIZE)begin
                     if (write_buf == 0)
-                        wr_data <= {4'b0, buffer0[addr]}; // 填充高4位为0
-                    else
                         wr_data <= {4'b0, buffer1[addr]}; // 填充高4位为0
+                    else
+                        wr_data <= {4'b0, buffer0[addr]}; // 填充高4位为0
                 end else begin
                     case(addr)
                         READ_STATE_ADDR:begin
                             wr_data <= {15'b0,is_read_ready};
                         end
                         default:begin
-                            wr_data <= 16'hFFFF;// Dummy Data
+                            wr_data <= 16'hFFFF;
                         end
                     endcase
                 end
