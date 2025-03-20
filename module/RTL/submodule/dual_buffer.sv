@@ -38,34 +38,32 @@ localparam READ_STATE_ADDR = 16'h4000;
 // 同步adc_clk域的触发信号到clk域
 reg  [2:0] sync_stable;
 reg  [2:0] sync_signal_in;
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        sync_stable     <= 3'b0;
-        sync_signal_in  <= 3'b0;
-    end else begin
-        sync_stable     <= {sync_stable[1:0], stable};
-        sync_signal_in  <= {sync_signal_in[1:0], signal_in};
-    end
-end
-
 // 检测signal_in上升沿
 wire signal_rise = (sync_signal_in[2:1] == 2'b01);
 
 // ================== 数据写入逻辑（跨时钟域处理） ==================
 reg  [DATA_WIDTH-1:0] adc_data_sync;
+reg [1:0] adc_clk_sync;
 reg  [1:0] adc_sample_en;
-wire adc_clk_rising = ~adc_sample_en[1] & adc_sample_en[0];
+wire adc_clk_rising = (adc_clk_sync[1:0] == 2'b01); // 正确边沿检测
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        adc_data_sync <= 0;
         adc_sample_en <= 0;
+        sync_stable     <= 3'b0;
+        sync_signal_in  <= 3'b0;
     end else begin
+        sync_stable     <= {sync_stable[1:0], stable};
+        sync_signal_in  <= {sync_signal_in[1:0], signal_in};
         // 检测adc_clk上升沿
         adc_sample_en <= {adc_sample_en[0], adc_clk};
-        adc_data_sync <= adc_data;
     end
 end
-
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) 
+        adc_data_sync <= 12'b0;
+    else if (adc_clk_rising) // 仅在adc_clk上升沿采样
+        adc_data_sync <= adc_data;
+end
 
 // ================== 主状态机 ==================
 always @(posedge clk or negedge rst_n) begin
@@ -134,20 +132,21 @@ always @(posedge clk or negedge rst_n) begin
         case (fsmc_state)
             FSMC_IDLE: begin
                 if(en_rising)begin
-                    fsmc_state <= JUDGE;
+                    fsmc_state <= FSMC_JUDGE;
                     addr <= rd_data;// 锁存地址
                 end
             end
             FSMC_JUDGE: begin
                 if(state)begin
-                    fsmc_state <= WRITE;
+                    fsmc_state <= FSMC_WRITE;
                 end else begin
-                    fsmc_state <= READ;
+                    fsmc_state <= FSMC_READ;
                 end
             end
+            // 本模块读，单片机写
             FSMC_READ: begin
                 if(en_falling)begin
-                    fsmc_state <= IDLE;
+                    fsmc_state <= FSMC_IDLE;
                     case (addr)
                         READ_STATE_ADDR: begin
                             reg_read_prev <= reg_read;
@@ -156,9 +155,10 @@ always @(posedge clk or negedge rst_n) begin
                     endcase
                 end
             end
+            // 本模块写，单片机读
             FSMC_WRITE: begin
                 if(~en)begin
-                    fsmc_state <= IDLE;
+                    fsmc_state <= FSMC_IDLE;
                 end
 
                 if(addr < BUF_SIZE)begin
@@ -170,6 +170,9 @@ always @(posedge clk or negedge rst_n) begin
                     case(addr)
                         READ_STATE_ADDR:begin
                             wr_data <= {15'b0,is_read_ready};
+                        end
+                        default:begin
+                            wr_data <= 16'hFFFF;// Dummy Data
                         end
                     endcase
                 end
