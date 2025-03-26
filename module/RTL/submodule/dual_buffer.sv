@@ -89,15 +89,19 @@ always @(posedge clk or negedge rst_n) begin
             SAMPLING: begin
                 if (!sync_stable[1]) begin  // stable变低则终止
                     current_state <= IDLE;
-                end else if(write_ptr == BUF_SIZE-1)begin
-                    current_state <= SWITCH_BUF;  
-                end else if(adc_clk_rising) begin
-                    write_ptr <= write_ptr + 1'b1;
+                 end else if (adc_clk_rising) begin
                     // 写入当前缓冲区
                     if (write_buf == 0)
                         buffer0[write_ptr] <= adc_data_sync;
                     else
                         buffer1[write_ptr] <= adc_data_sync;
+                    
+                    // 递增指针并检查是否写满
+                    if (write_ptr == BUF_SIZE - 1) begin
+                        current_state <= SWITCH_BUF;
+                    end else begin
+                        write_ptr <= write_ptr + 1'b1;
+                    end
                 end
             end
 
