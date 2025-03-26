@@ -99,10 +99,8 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-always_ff @( posedge adc_clk or negedge rst_n) begin
-    if(!rst_n)begin
-        write_ptr <=0;
-    end else if(current_state==SAMPLING)begin
+always_ff @( posedge adc_clk) begin
+    if(current_state==SAMPLING)begin
         // 写入当前缓冲区
         if (write_buf_copy1)
             buffer1[write_ptr] <= sync_adc_data;
