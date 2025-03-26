@@ -5,7 +5,7 @@
 //          然后需要对READ_STATE_ADDR地址处写入1，然后读取，读取完之后，再写入0，表示读取完成。
 module dual_buffer #(
     parameter DATA_WIDTH = 16,    // 数据位宽
-    parameter BUF_SIZE   = 1024   // 缓冲区大小（深度）
+    parameter BUF_SIZE   = 1024   // 缓冲区大小（深度），需要改后面的地址
 )(
     // 系统信号
     input  wire                  clk,
@@ -23,27 +23,29 @@ module dual_buffer #(
 );
 
 // ================== 状态机与缓冲区定义 ==================
-localparam IDLE     = 2'b00;
-localparam SAMPLING = 2'b01;
-localparam SWITCH_BUF = 2'b10;
+typedef enum logic [1:0] {
+    IDLE,
+    SAMPLING,//准备状态
+    SWITCH_BUF
+} State;
 
-reg  [1:0]          current_state;
-reg                 write_buf;      // 当前写缓冲区 (0或1)
+State current_state;
+reg   write_buf;      // 当前写缓冲区 (0或1)
 reg  [$clog2(BUF_SIZE)-1:0] write_ptr;
-reg  [11:0] buffer0 [BUF_SIZE];
-reg  [11:0] buffer1 [BUF_SIZE];
+(* ram_style = "block" *) reg  [11:0] buffer0 [BUF_SIZE];
+(* ram_style = "block" *) reg  [11:0] buffer1 [BUF_SIZE];
 reg reg_read;// 读寄存器，高电平表明单片机开始读数据了
 reg reg_read_prev;
 
 // 【读状态寄存器】，单片机可通过读操作判断是否可以读取，通过写入1表示正在读取，写入0表示读取完成
 localparam READ_STATE_ADDR = 16'h4000;
 
-// ================== 跨时钟域同步逻辑 ==================
-// 同步adc_clk域的触发信号到clk域
+// ================== 边沿检测 ==================
 reg adc_clk_prev,stable_prev,signal_in_prev,en_prev;
 // 复制多份高扇出信号
 reg write_buf_copy,write_buf_not;
 reg buf_full; // 标志当前缓冲区已满
+reg trigger_condition;// 触发条件
 wire adc_clk_rising = (adc_clk & ~adc_clk_prev);
 wire signal_in_rising = (sync_signal_in & ~signal_in_prev);// 与ADC_CLK同频的上升沿信号
 wire reg_read_rising = reg_read & ~reg_read_prev;
@@ -55,6 +57,7 @@ always @(posedge clk) begin
     write_buf_copy <= write_buf;
     write_buf_not <= ~write_buf;
     buf_full <= (write_ptr == BUF_SIZE - 1);
+    trigger_condition <=stable && signal_in_rising && !reg_read;
 end
 always @(posedge adc_clk) begin
     signal_in_prev  <= sync_signal_in;// 仅在adc_clk保持更新方波信号，否则无法检测到触发信号
@@ -72,7 +75,7 @@ always @(posedge clk or negedge rst_n) begin
     end else begin
         case (current_state)
             IDLE: begin
-                if (stable && signal_in_rising && !reg_read) begin
+                if (trigger_condition) begin
                     current_state <= SAMPLING;
                     write_ptr     <= 0;
                 end
@@ -126,7 +129,6 @@ always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         reg_read <= 0;
         fsmc_state <= FSMC_IDLE;
-        wr_data <= 16'hz;
     end else begin
         case (fsmc_state)
             FSMC_IDLE: begin
@@ -134,7 +136,6 @@ always @(posedge clk or negedge rst_n) begin
                     fsmc_state <= FSMC_JUDGE;
                     addr <= rd_data;// 锁存地址
                 end
-                wr_data <= 16'hz;
             end
             FSMC_JUDGE: begin
                 if(state)begin
@@ -159,28 +160,23 @@ always @(posedge clk or negedge rst_n) begin
                 if(~en)begin
                     fsmc_state <= FSMC_IDLE;
                 end
-
-                if(addr < BUF_SIZE)begin
-                    if (write_buf_not == 0)
-                        wr_data <= {4'b0, buffer0[addr]}; // 填充高4位为0
-                        
-                    else
-                        wr_data <= {4'b0, buffer1[addr]}; // 填充高4位为0
-                end else begin
+                if(addr[14])begin
                     case(addr)
-                        READ_STATE_ADDR:begin
-                            wr_data <= {15'b0,has_switched};
-                        end
-                        default:begin
-                            wr_data <= 16'hFFFF;
-                        end
+                        READ_STATE_ADDR: wr_data <= {15'b0,has_switched};
+                        default:wr_data <= 16'hFFFF;
                     endcase
+                end else begin
+                    if (write_buf_not == 0)
+                        wr_data <= {4'b0, buffer0[addr[11:0]]}; // 填充高4位为0
+                    else
+                        wr_data <= {4'b0, buffer1[addr[11:0]]}; // 填充高4位为0
                 end
             end
             default:fsmc_state <= FSMC_IDLE;
         endcase
     end
 end
+
 
 
 always @(posedge clk or negedge rst_n) begin
