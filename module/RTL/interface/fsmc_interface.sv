@@ -1,8 +1,8 @@
-// 说明：
-// 对于独立模块来说，cs为高电平时，要通过state判断是什么时序，然后根据时序来执行相应操作
-//      读取时序：CS处于下降沿，可以读取数据
-//      写入时序：只要CS拉高，就能直接写入数据，并且此时可以读取到地址。在cs拉低时停止输入。（其实可以不停止，不过那样并不好）
-// 【Fmax】：332MHz
+// 【简介】：FSMC接口模块
+// 【功能】：子模块需要满足一定时序，某位cs片选的上升沿时，此时读取数据是地址，如果此时state为低点平，那么就是单片机写时序子模块读时序，反之~。
+//          单片机读时序子模块写时序：在state下降沿时可以写入数据，直到片选重回低电平。
+//          单片机写时序子模块读时序：在片选下降沿时可以读取数据
+// 【Fmax】：331MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
     parameter DATA_WIDTH = 16,              // 数据位宽
@@ -72,12 +72,11 @@ always @(posedge clk or negedge reset_n) begin
         state <= 1'b0;
         cs <= 0;
     end else begin
-        
+        state <= NWE;  // 同步NWE状态
         // 地址捕获
         if (nadv_rising) begin
             rd_data <= AD[DATA_WIDTH-1:0];
             // 片选生成
-            state <= NWE;  // 锁存NWE状态
             cs <= (1 << AD[ADDR_WIDTH-1 :DATA_WIDTH]);
         end else if(~state && nwe_rising)begin
         // ===================
