@@ -81,42 +81,15 @@ initial begin
     rst_n = 1'b0;#5;
     rst_n = 1'b1;#5;
 
-    // 启动采集条件
-    #10 stable = 1;
-    @(posedge adc_clk);
-    signal_in = 1;
-    
-    // 生成ADC数据（简单递增模式）
-    for (int i=0; i<BUF_SIZE; i++) begin
-        adc_data = i[11:0]+5;
-        @(posedge adc_clk);
-    end
+    $display("==================test:1==================");
+    read_data();
+    $display("==================test:2==================");
+    read_data();
+    $display("==================test:3==================");
+    read_data();
 
-    signal_in = 0;
-    #10;
-    @(posedge adc_clk);
-    signal_in = 1;
-
-    for (int i=0; i<BUF_SIZE-512; i++) begin
-        adc_data = i[11:0]+5;
-        @(posedge adc_clk);
-    end
-
-    fsmc_write(READ_STATE_ADDR,1);
-    for (int i=0; i<BUF_SIZE; i++) begin
-        fsmc_read(i);
-    end
-    fsmc_write(READ_STATE_ADDR,0);
-
-    fsmc_read(READ_STATE_ADDR);
-    #10;
 
     
-    #10;
-    fsmc_read(READ_STATE_ADDR);
-
-
-
 
     #100;
 
@@ -125,7 +98,44 @@ initial begin
     finsh = 1'b1;
 end
 
+initial begin
+    #10;
+    generate_adc(10);
+    #10;
+    generate_adc(20);
+    #10;
+    generate_adc(30);
+end
 
+// 生成ADC数据
+task generate_adc(input [11:0] offset = 0);
+begin
+    // 启动采集条件
+    #10 stable = 1;
+    @(posedge adc_clk);
+    signal_in = 1;
+    
+    // 生成ADC数据（简单递增模式）
+    for (int i=0; i<BUF_SIZE; i++) begin
+        adc_data = i[11:0]+offset;
+        @(posedge adc_clk);
+    end
+end
+endtask
+    
+// 读取数据
+task read_data();
+begin
+    wait(uut.is_read_ready)
+    $display("------------> read data");
+    fsmc_read(READ_STATE_ADDR);//
+    fsmc_write(READ_STATE_ADDR,1);
+    for (int i=0; i<BUF_SIZE; i++) begin
+        fsmc_read(i);
+    end
+    fsmc_write(READ_STATE_ADDR,0);
+end
+endtask
 
 
 // 模拟FSMC读取操作

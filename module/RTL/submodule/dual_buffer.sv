@@ -32,7 +32,6 @@ reg                 write_buf;      // 当前写缓冲区 (0或1)
 reg  [$clog2(BUF_SIZE)-1:0] write_ptr;
 reg  [11:0] buffer0 [BUF_SIZE];
 reg  [11:0] buffer1 [BUF_SIZE];
-reg is_read_ready;
 reg reg_read;// 读寄存器，高电平表明单片机开始读数据了
 reg reg_read_prev;
 
@@ -70,7 +69,19 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
+// 复制多份高扇出信号
+reg write_buf_copy,write_buf_not;
+reg buf_full; // 标志当前缓冲区已满
+always @(posedge clk) begin
+    write_buf_copy <= write_buf;
+    write_buf_not <= ~write_buf;
+    buf_full <= (write_ptr == BUF_SIZE - 1);
+    reg_read_prev <= reg_read;
+    // 当缓冲区切换后，并且缓冲区有效时，单片机可以读。避免读到重复缓冲区并且保证缓冲区有效
+end
+
 // ================== 主状态机 ==================
+reg has_switched;// 确保切换过缓冲区
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         current_state <= IDLE;
@@ -91,14 +102,14 @@ always @(posedge clk or negedge rst_n) begin
                     current_state <= IDLE;
                  end else if (adc_clk_rising) begin
                     // 写入当前缓冲区
-                    if (write_buf == 0)
+                    if (write_buf_copy == 0)
                         buffer0[write_ptr] <= adc_data_sync;
                     else
                         buffer1[write_ptr] <= adc_data_sync;
                     
                     // 递增指针并检查是否写满
-                    if (write_ptr == BUF_SIZE - 1) begin
-                        current_state <= SWITCH_BUF;
+                    if (buf_full) begin
+                        current_state <= SWITCH_BUF;             
                     end else begin
                         write_ptr <= write_ptr + 1'b1;
                     end
@@ -123,7 +134,7 @@ end
 reg en_prev;
 wire en_rising = en & !en_prev;
 wire en_falling = !en & en_prev;
-wire reg_read_falling = reg_read_prev & ~reg_read;// 表明单片机读取完了
+wire reg_read_rising = reg_read & ~reg_read_prev;
 
 typedef enum logic [2:0] {
     FSMC_IDLE,
@@ -138,7 +149,6 @@ always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         en_prev  <= 0;
         reg_read <= 0;
-        reg_read_prev <= 0;
         fsmc_state <= FSMC_IDLE;
         wr_data <= 16'hz;
     end else begin
@@ -164,8 +174,7 @@ always @(posedge clk or negedge rst_n) begin
                     fsmc_state <= FSMC_IDLE;
                     case (addr)
                         READ_STATE_ADDR: begin
-                            reg_read_prev <= reg_read;
-                            reg_read <= rd_data[0]; 
+                            reg_read <= rd_data[0];  
                         end
                     endcase
                 end
@@ -177,14 +186,15 @@ always @(posedge clk or negedge rst_n) begin
                 end
 
                 if(addr < BUF_SIZE)begin
-                    if (write_buf == 0)
-                        wr_data <= {4'b0, buffer1[addr]}; // 填充高4位为0
-                    else
+                    if (write_buf_not == 0)
                         wr_data <= {4'b0, buffer0[addr]}; // 填充高4位为0
+                        
+                    else
+                        wr_data <= {4'b0, buffer1[addr]}; // 填充高4位为0
                 end else begin
                     case(addr)
                         READ_STATE_ADDR:begin
-                            wr_data <= {15'b0,is_read_ready};
+                            wr_data <= {15'b0,has_switched};
                         end
                         default:begin
                             wr_data <= 16'hFFFF;
@@ -198,21 +208,13 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-// ================== 冲突处理 ==================
-// 保证缓冲区切换时无读操作
-always @(posedge clk or negedge rst_n) begin
-    if(!rst_n)begin
-        is_read_ready <= 0;
-    end else begin
-        if(write_ptr == BUF_SIZE-1)begin
-            is_read_ready <= 1;
-        end
 
-        // 读完缓冲区后，释放读信号
-        if(reg_read_falling)begin
-            is_read_ready <= 0;
-        end
+always @(posedge clk) begin
+    if(reg_read_rising)begin
+        // 上升沿，表明单片机开始读取了，此时复制一下本次读取的buf
+        has_switched <= 1'b0;// 重置切换标志
+    end else if(current_state == SWITCH_BUF)begin
+        has_switched <= 1'b1;// 只要切换一次即可
     end
 end
-
 endmodule
