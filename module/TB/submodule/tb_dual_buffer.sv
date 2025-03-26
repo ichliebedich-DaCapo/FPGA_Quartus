@@ -87,34 +87,36 @@ initial begin
     signal_in = 1;
     
     // 生成ADC数据（简单递增模式）
-    for (int i=0; i<BUF_SIZE*2; i++) begin
+    for (int i=0; i<BUF_SIZE; i++) begin
+        adc_data = i[11:0]+5;
         @(posedge adc_clk);
-        adc_data = i[11:0];
     end
 
-    fsmc_read(READ_STATE_ADDR);
+    signal_in = 0;
     #10;
+    @(posedge adc_clk);
+    signal_in = 1;
+
+    for (int i=0; i<BUF_SIZE-512; i++) begin
+        adc_data = i[11:0]+5;
+        @(posedge adc_clk);
+    end
 
     fsmc_write(READ_STATE_ADDR,1);
+    for (int i=0; i<BUF_SIZE; i++) begin
+        fsmc_read(i);
+    end
+    fsmc_write(READ_STATE_ADDR,0);
+
+    fsmc_read(READ_STATE_ADDR);
+    #10;
+
+    
     #10;
     fsmc_read(READ_STATE_ADDR);
 
 
-    // 测试用例1：基本写入和缓冲区切换
-    // $display("=== Test Case 1: Basic Write Operation ===");
-    // test_basic_write();
-    
-    // // 测试用例2：跨时钟域读取验证
-    // $display("=== Test Case 2: Cross-domain Read Verification ===");
-    // test_read_operation();
-    
-    // // 测试用例3：错误状态恢复测试
-    // $display("=== Test Case 3: Error State Recovery ===");
-    // test_error_recovery();
-    
-    // // 测试用例4：读写冲突测试
-    // $display("=== Test Case 4: Read-Write Conflict ===");
-    // test_read_write_conflict();
+
 
     #100;
 
@@ -123,149 +125,45 @@ initial begin
     finsh = 1'b1;
 end
 
-  
-// // 测试用例1：基本写入操作
-// task test_basic_write;
-// begin
-//     // 启动采集条件
-//     #10 stable = 1;
-//     signal_in = 1;
-    
-//     // 生成ADC数据（简单递增模式）
-//     for (int i=0; i<BUF_SIZE*2; i++) begin
-//         @(posedge adc_clk);
-//         adc_data = i[11:0];
-//     end
-//     // fork
-//     //     begin
-//     //         for (int i=0; i<BUF_SIZE*2; i++) begin
-//     //             @(posedge adc_clk);
-//     //             adc_data = i[11:0];
-//     //         end
-//     //     end
-//     //     begin
-//     //         // 等待第一个缓冲区填满
-//     //         #100;
-//     //         wait(uut.write_ptr == BUF_SIZE-1);
-//     //         $display("Buffer 0 filled at %0t", $time);
-            
-//     //         // 验证缓冲区切换
-//     //         wait(uut.write_buf == 1);
-//     //         $display("Buffer switched to 1 at %0t", $time);
-//     //     end
-//     // join
-// end
-// endtask
 
-// // 测试用例2：读取操作验证
-// task test_read_operation;
-// begin
-//     // 读取缓冲区0
-//     read_buffer(0);
-    
-//     // 等待下一次缓冲区切换
-//     wait(uut.write_buf == 0);
-    
-//     // 读取缓冲区1
-//     read_buffer(BUF_SIZE);
-// end
-// endtask
 
-// // 测试用例3：错误状态恢复
-// task test_error_recovery;
-// begin
-//     // 触发错误状态
-//     #10 stable = 0;
-//     #100 stable = 1;
-    
-//     // 验证状态机恢复
-//     wait(uut.current_state == uut.IDLE);
-//     $display("Error state recovered at %0t", $time);
-// end
-// endtask
-
-// // 测试用例4：读写冲突测试
-// task test_read_write_conflict;
-// begin
-//     // fork
-//     //     begin
-//     //         // 启动持续写入
-//     //         stable = 1;
-//     //         signal_in = 1;
-//     //         repeat(100) @(posedge adc_clk) adc_data = $random;
-//     //     end
-//     //     begin
-//     //         // 随机读取操作
-//     //         repeat(20) begin
-//     //             #50 read_random_address();
-//     //         end
-//     //     end
-//     // join
-// end
-// endtask
-
-// // 读取指定缓冲区
-// task read_buffer(input int base_addr);
-// begin
-//     $display("Reading buffer ......");
-//     wait(uut.is_read_ready);
-//     fsmc_write(READ_STATE_ADDR,1);
-//     for (int i=0; i<BUF_SIZE; i++) begin
-//         fsmc_read(base_addr + i);
-//         // 验证数据（注意高4位补零）
-//         $display("Data mismatch at addr %0h: Exp %0h, Got %0h", 
-//                   i, {4'b0, i[11:0]}, wr_data);
-//     end
-//     fsmc_write(READ_STATE_ADDR,0);
-// end
-// endtask
 
 // 模拟FSMC读取操作
 task fsmc_read(input [15:0] addr);
 begin
-    #10;
+    #5;
     en = 1;
     state = 1;      // 读模式
     rd_data = addr; // 地址作为输入
     #10;
     en =0;
-    $display("[Addr]:%0h -> %0h", addr, wr_data);
-    // 可以从wr_data中获取数据
+
+    $display("[Addr]:%0d -> %0d  buf0:%d  buf1:%d  ptr:%d buf:%d", addr, wr_data,uut.buffer0[addr],uut.buffer1[addr],uut.write_ptr,uut.write_buf);
 end
 endtask
 
 task fsmc_write(input [15:0] addr,input [15:0] data);
 begin
-    #10;
+    #5;
     en = 1;
-    state = 0;      // 读模式
+    state = 0;      // 写模式
     rd_data = addr; // 地址作为输入
     #5;
     rd_data = data;
-    #10 en = 0;
+    #5;
+    en = 0;
+    #5;
+    $display("reg_read:%d",uut.reg_read);
+    // $display("[Addr]:%0d <- %0d", addr, data);
 end
 endtask
 
-// // 随机地址读取
-// task read_random_address;
-// begin
-//     automatic logic [15:0] addr = $urandom_range(0, BUF_SIZE*2);
-//     fsmc_read(addr);
-//     $display("Read addr %0h: %0h", addr, wr_data);
-// end
-// endtask
-
-// 波形记录
-// initial begin
-//     $dumpfile("waveform.vcd");
-//     $dumpvars(0, tb_dual_buffer);
-// end
 
 
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time: %t ptr:%d state:%d ready:%d",$time,uut.write_ptr,uut.fsmc_state,uut.is_read_ready);
+    $monitor("time:%t ready:%d  buf:%d",$time,uut.is_read_ready,uut.write_buf);
 end
 
 // 检测en上升沿并捕获数据

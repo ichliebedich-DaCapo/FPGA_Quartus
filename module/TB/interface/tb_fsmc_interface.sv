@@ -1,7 +1,7 @@
 // `define DEBUG
 
 
-module fsmc_interface_tb;
+module tb_fsmc_interface;
 
 
 

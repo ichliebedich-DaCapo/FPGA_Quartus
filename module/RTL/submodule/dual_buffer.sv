@@ -1,6 +1,8 @@
 // 【简介】：双缓冲子模块
 // 【功能】：根据稳定信号，从ADC读取数据，使用双缓冲机制。同时添加了触发机制，只在电压比较器处于上升沿时开始读取。
 // 【Fmax】：316.66MHz
+// 【note】：单片机如果想要读取数据，先读取READ_STATE_ADDR处的数据，如果为1，那么久可以读取了。
+//          然后需要对READ_STATE_ADDR地址处写入1，然后读取，读取完之后，再写入0，表示读取完成。
 module dual_buffer #(
     parameter DATA_WIDTH = 16,    // 数据位宽
     parameter BUF_SIZE   = 1024   // 缓冲区大小（深度）
@@ -23,13 +25,13 @@ module dual_buffer #(
 // ================== 状态机与缓冲区定义 ==================
 localparam IDLE     = 2'b00;
 localparam SAMPLING = 2'b01;
-localparam ERROR    = 2'b10;
+localparam SWITCH_BUF = 2'b10;
 
 reg  [1:0]          current_state;
 reg                 write_buf;      // 当前写缓冲区 (0或1)
 reg  [$clog2(BUF_SIZE)-1:0] write_ptr;
-reg  [11:0] buffer0 [0:BUF_SIZE-1];
-reg  [11:0] buffer1 [0:BUF_SIZE-1];
+reg  [11:0] buffer0 [BUF_SIZE];
+reg  [11:0] buffer1 [BUF_SIZE];
 reg is_read_ready;
 reg reg_read;// 读寄存器，高电平表明单片机开始读数据了
 reg reg_read_prev;
@@ -74,6 +76,7 @@ always @(posedge clk or negedge rst_n) begin
         current_state <= IDLE;
         write_buf     <= 0;
         write_ptr     <= 0;
+        // 如果对缓冲区清零会导致存储空间不够
     end else begin
         case (current_state)
             IDLE: begin
@@ -85,11 +88,9 @@ always @(posedge clk or negedge rst_n) begin
 
             SAMPLING: begin
                 if (!sync_stable[1]) begin  // stable变低则终止
-                    current_state <= ERROR;
-                end else if (write_ptr == BUF_SIZE-1) begin
                     current_state <= IDLE;
-                    write_buf     <= ~write_buf;  // 切换缓冲区
-                    write_ptr     <= 0;
+                end else if(write_ptr == BUF_SIZE-1)begin
+                    current_state <= SWITCH_BUF;  
                 end else if(adc_clk_rising) begin
                     write_ptr <= write_ptr + 1'b1;
                     // 写入当前缓冲区
@@ -100,10 +101,14 @@ always @(posedge clk or negedge rst_n) begin
                 end
             end
 
-            ERROR: begin
-                if (sync_stable[1]) 
+            SWITCH_BUF:begin
+                if(!reg_read)begin
+                    write_buf     <= ~write_buf;  // 切换缓冲区
                     current_state <= IDLE;
+                end
             end
+
+            default: current_state <= IDLE;
         endcase
     end
 end
@@ -195,7 +200,7 @@ always @(posedge clk or negedge rst_n) begin
     if(!rst_n)begin
         is_read_ready <= 0;
     end else begin
-        if(current_state == SAMPLING && write_ptr == BUF_SIZE-1)begin
+        if(write_ptr == BUF_SIZE-1)begin
             is_read_ready <= 1;
         end
 
