@@ -46,7 +46,7 @@ reg write_buf_copy,write_buf_not;
 reg buf_full; // 标志当前缓冲区已满
 wire adc_clk_rising = (adc_clk & ~adc_clk_prev);
 wire signal_in_rising = (sync_signal_in & ~signal_in_prev);// 与ADC_CLK同频的上升沿信号
-
+wire reg_read_rising = reg_read & ~reg_read_prev;
 always @(posedge clk) begin
     en_prev <= en;
     stable_prev <= stable;
@@ -182,7 +182,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-wire reg_read_rising = reg_read & ~reg_read_prev;
+
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n)begin
         has_switched <= 1'b0;

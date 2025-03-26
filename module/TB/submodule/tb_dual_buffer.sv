@@ -76,6 +76,7 @@ initial begin
     stable =0;
     state = 0;
     adc_data = 0;
+    rd_data = 0;
 
     // 释放复位
     rst_n = 1'b0;#5;
@@ -87,30 +88,29 @@ initial begin
     read_data();
     $display("==================test:3==================");
     read_data();
-
-
     
 
     #100;
-
-
     // 结束仿真 
     finsh = 1'b1;
 end
 
 initial begin
     #10;
-    generate_adc(10);
-    #10;
-    generate_adc(20);
-    #10;
-    generate_adc(30);
+    for (int i = 0; i < 100; i++) begin
+        generate_adc(i*10);
+        #10;
+    end
+    // 结束仿真 
+    $display("=========ADC_Done==========");
+    finsh = 1'b1;
 end
 
 // 生成ADC数据
 task generate_adc(input [11:0] offset = 0);
 begin
     // 启动采集条件
+    signal_in =0;
     #10 stable = 1;
     @(posedge adc_clk);
     signal_in = 1;
@@ -128,12 +128,12 @@ task read_data();
 begin
     wait(uut.has_switched)
     $display("------------> read data");
-    fsmc_read(READ_STATE_ADDR);//
-    fsmc_write(READ_STATE_ADDR,1);
+    fsmc_read(READ_STATE_ADDR);// 获取状态
+    fsmc_write(READ_STATE_ADDR,1);// 写入1，表示正在读取
     for (int i=0; i<BUF_SIZE; i++) begin
         fsmc_read(i);
     end
-    fsmc_write(READ_STATE_ADDR,0);
+    fsmc_write(READ_STATE_ADDR,0);// 写入0，表示读取完成
 end
 endtask
 
@@ -163,7 +163,7 @@ begin
     #5;
     en = 0;
     #5;
-    $display("reg_read:%d",uut.reg_read);
+    $display("[W] time:%t reg_read:%d",$time,uut.reg_read);
     // $display("[Addr]:%0d <- %0d", addr, data);
 end
 endtask
@@ -173,7 +173,7 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time:%t ready:%d  buf:%d",$time,uut.has_switched,uut.write_buf);
+    $monitor("time:%t switch:%d  buf:%d reg_read:%d",$time,uut.has_switched,uut.write_buf,uut.reg_read);
 end
 
 // 检测en上升沿并捕获数据
