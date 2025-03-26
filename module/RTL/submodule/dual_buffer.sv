@@ -31,7 +31,7 @@ typedef enum logic [1:0] {
 
 State current_state;
 reg   write_buf;      // 当前写缓冲区 (0或1)
-reg  [$clog2(BUF_SIZE)-1:0] write_ptr;
+reg  [$clog2(BUF_SIZE):0] write_ptr;
 (* ram_style = "block" *) reg  [11:0] buffer0 [BUF_SIZE];
 (* ram_style = "block" *) reg  [11:0] buffer1 [BUF_SIZE];
 reg reg_read;// 读寄存器，高电平表明单片机开始读数据了
@@ -43,8 +43,8 @@ localparam READ_STATE_ADDR = 16'h4000;
 // ================== 边沿检测 ==================
 reg adc_clk_prev,stable_prev,signal_in_prev,en_prev;
 // 复制多份高扇出信号
-reg write_buf_copy1,write_buf_copy2;
 reg buf_full; // 标志当前缓冲区已满
+reg write_buf_copy1,write_buf_copy2;
 reg trigger_condition;// 触发条件
 wire adc_clk_rising = (adc_clk & ~adc_clk_prev);
 wire signal_in_rising = (sync_signal_in & ~signal_in_prev);// 与ADC_CLK同频的上升沿信号
@@ -56,7 +56,7 @@ always @(posedge clk) begin
     reg_read_prev <= reg_read;
     write_buf_copy1 <= write_buf;
     write_buf_copy2 <= write_buf;
-    buf_full <= (write_ptr == BUF_SIZE - 1);
+    buf_full <= (write_ptr > BUF_SIZE - 1);
     trigger_condition <=stable && signal_in_rising && !reg_read;
 end
 always @(posedge adc_clk) begin
@@ -76,14 +76,26 @@ always @(posedge clk or negedge rst_n) begin
             IDLE: begin
                 if (trigger_condition) begin
                     current_state <= SAMPLING;
+                    write_ptr  <= 0;
                 end
             end
 
             SAMPLING: begin
                 if (!stable) begin  // stable变低则终止
                     current_state <= IDLE;
-                 end else if (buf_full) begin
-                    current_state <= SWITCH_BUF;    
+                end else if (adc_clk_rising) begin
+                    // 写入当前缓冲区
+                    if (write_buf_copy1 == 0)
+                        buffer0[write_ptr] <= sync_adc_data;
+                    else
+                        buffer1[write_ptr] <= sync_adc_data;
+                    
+                    // 递增指针并检查是否写满
+                    if (buf_full) begin
+                        current_state <= SWITCH_BUF;             
+                    end else begin
+                        write_ptr <= write_ptr + 1'b1;
+                    end
                 end
             end
 
@@ -99,22 +111,6 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-always_ff @( posedge adc_clk) begin
-    if(current_state==SAMPLING)begin
-        // 写入当前缓冲区
-        if (write_buf_copy1)
-            buffer1[write_ptr] <= sync_adc_data;
-        else
-            buffer0[write_ptr] <= sync_adc_data; 
-        
-        // 递增指针并检查是否写满
-        if (!buf_full) begin
-            write_ptr <= write_ptr + 1'b1;
-        end
-    end else if(current_state == IDLE)begin
-            write_ptr  <= 0;
-    end
-end
 
 // ================== 外部接口读写仲裁 ==================
 wire en_rising = en & !en_prev;

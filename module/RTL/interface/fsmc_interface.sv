@@ -2,13 +2,12 @@
 // 对于独立模块来说，cs为高电平时，要通过state判断是什么时序，然后根据时序来执行相应操作
 //      读取时序：CS处于下降沿，可以读取数据
 //      写入时序：只要CS拉高，就能直接写入数据，并且此时可以读取到地址。在cs拉低时停止输入。（其实可以不停止，不过那样并不好）
+// 【Fmax】：332MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
     parameter DATA_WIDTH = 16,              // 数据位宽
-    parameter CS_WIDTH   = 2,               // 低位片选地址位宽，是从高位地址片选往后数的，这里为A[15:14]
     parameter DATA_HOLD_CYCLES = 2,         // 数据保持周期
-    parameter HIGH_ADDR_CS = 2'b01,         // 高位地址片选，这里默认指的是A[17:16]
-    parameter HIGH_ADDR_WIDTH = 2           // 高位地址片选所占位数
+    parameter NUM_MODUELS = 2
 )(
     // ================= 物理接口 =================
     inout  [ADDR_WIDTH-1:0] AD,      // 复用地址/数据总线
@@ -22,9 +21,9 @@ module fsmc_interface #(
     
     // ================= 用户接口 =================
     output logic [DATA_WIDTH-1:0] rd_data,
-    input  logic [DATA_WIDTH-1:0] wr_data,
-    output logic        state,       // 1:读 0:写。对于独立模块来说是相反的
-    output logic [2**CS_WIDTH-1:0] cs
+    input  wire  [DATA_WIDTH-1:0] wr_data [NUM_MODUELS-1:0], // 数组化输入
+    output logic                  state,       // 1:读 0:写。对于独立模块来说是相反的
+    output logic [2**(ADDR_WIDTH-DATA_WIDTH)-1:0] cs
 );
 
 // 信号声明
@@ -72,21 +71,15 @@ always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
         state <= 1'b0;
         cs <= 0;
-        rd_data <= 0;
     end else begin
         
         // 地址捕获
         if (nadv_rising) begin
             rd_data <= AD[DATA_WIDTH-1:0];
-            
             // 片选生成
-            if (AD[ADDR_WIDTH-1 -:HIGH_ADDR_WIDTH] == HIGH_ADDR_CS)begin
-                state <= NWE;  // 锁存NWE状态
-                cs <= (1 << AD[ADDR_WIDTH-1-HIGH_ADDR_WIDTH -:CS_WIDTH]);
-            end 
-        end
-
-        else if(~state && nwe_rising)begin
+            state <= NWE;  // 锁存NWE状态
+            cs <= (1 << AD[ADDR_WIDTH-1 :DATA_WIDTH]);
+        end else if(~state && nwe_rising)begin
         // ===================
         // 写数据捕获
         // ===================
@@ -94,7 +87,6 @@ always @(posedge clk or negedge reset_n) begin
             // 写操作清除片选
             cs <= 0;
         end  
-
         // 读操作清除片选
         else if (state && output_enable_falling)
             cs <= 0;
@@ -137,13 +129,11 @@ always @(posedge clk or negedge reset_n) begin
                 end else begin
                     output_enable <= 1'b0; // 防止计数器异常
                 end
-            end
-            // 计数器结束后关闭使能
-            else begin
+            end else begin
+                // 计数器结束后关闭使能
                 if(~NOE) output_enable <= 1'b1;     // 确保初始使能
             end
-        end
-        else begin
+        end else begin
             hold_counter <= 0;
             hold_counter <= 0;
             noe_triggered  <= 0;          // 复位触发标志
@@ -152,6 +142,6 @@ always @(posedge clk or negedge reset_n) begin
 end
 
 // 总线驱动
-assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'bz}}, wr_data} : {ADDR_WIDTH{1'bz}};
+assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'bz}}, wr_data[cs]} : {ADDR_WIDTH{1'bz}};
 
 endmodule
