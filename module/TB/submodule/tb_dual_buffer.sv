@@ -56,9 +56,9 @@ dual_buffer uut (
     .rst_n(rst_n),
     // ADC信号（跨时钟域）
     .adc_clk(adc_clk),
-    .adc_data(adc_data),
+    .sync_adc_data(adc_data),
     .stable(stable),
-    .signal_in(signal_in),// 接电压比较器的方波信号
+    .sync_signal_in(signal_in),// 接电压比较器的方波信号
     // 外部模块接口
     .en(en),
     .state(state),     // 0=读 1=写
@@ -126,7 +126,7 @@ endtask
 // 读取数据
 task read_data();
 begin
-    wait(uut.is_read_ready)
+    wait(uut.has_switched)
     $display("------------> read data");
     fsmc_read(READ_STATE_ADDR);//
     fsmc_write(READ_STATE_ADDR,1);
@@ -173,7 +173,7 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time:%t ready:%d  buf:%d",$time,uut.is_read_ready,uut.write_buf);
+    $monitor("time:%t ready:%d  buf:%d",$time,uut.has_switched,uut.write_buf);
 end
 
 // 检测en上升沿并捕获数据

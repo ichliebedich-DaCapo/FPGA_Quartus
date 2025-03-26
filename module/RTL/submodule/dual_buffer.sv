@@ -12,9 +12,9 @@ module dual_buffer #(
     input  wire                  rst_n,
     // ADC信号（跨时钟域）
     input  wire                  adc_clk,
-    input  wire [11:0]           adc_data,
+    input  wire [11:0]           sync_adc_data,// 必须是同步信号，因此需要通过同步模块
     input  wire                  stable,
-    input  wire                  signal_in,// 接电压比较器的方波信号
+    input  wire                  sync_signal_in,// 接电压比较器的方波信号   必须是同步信号，因此需要通过同步模块
     // 外部模块接口
     input  wire                  en,
     input  wire                  state,     // 0=读 1=写
@@ -40,45 +40,26 @@ localparam READ_STATE_ADDR = 16'h4000;
 
 // ================== 跨时钟域同步逻辑 ==================
 // 同步adc_clk域的触发信号到clk域
-reg  [1:0] sync_stable;
-reg  [1:0] sync_signal_in;
-reg [1:0] adc_clk_sync;
-// 检测signal_in上升沿，为了匹配上ADC_CLK时钟域，触发信号必须与adc_clk同步
-wire signal_rise = (sync_signal_in[1:0] == 2'b01);
-
-// ================== 数据写入逻辑（跨时钟域处理） ==================
-reg  [11:0] adc_data_sync;
-wire adc_clk_rising = (adc_clk_sync[1:0] == 2'b01); // 正确边沿检测
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        sync_stable  <= 2'b0;
-        adc_clk_sync <= 2'b0;
-    end else begin
-        sync_stable     <= {sync_stable[0], stable};
-        // 检测adc_clk上升沿
-        adc_clk_sync <= {adc_clk_sync[0], adc_clk};
-    end
-end
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        adc_data_sync <= 12'b0;
-        sync_signal_in  <= 2'b0;
-    end else if (adc_clk_rising) begin// 仅在adc_clk上升沿采样
-        adc_data_sync <= adc_data;
-        sync_signal_in  <= {sync_signal_in[0], signal_in};
-    end
-end
-
+reg adc_clk_prev,stable_prev,signal_in_prev,en_prev;
 // 复制多份高扇出信号
 reg write_buf_copy,write_buf_not;
 reg buf_full; // 标志当前缓冲区已满
+wire adc_clk_rising = (adc_clk & ~adc_clk_prev);
+wire signal_in_rising = (sync_signal_in & ~signal_in_prev);// 与ADC_CLK同频的上升沿信号
+
 always @(posedge clk) begin
+    en_prev <= en;
+    stable_prev <= stable;
+    adc_clk_prev <= adc_clk;// adc时钟域本就由同步分频器产生，不需要额外同步
+    reg_read_prev <= reg_read;
     write_buf_copy <= write_buf;
     write_buf_not <= ~write_buf;
     buf_full <= (write_ptr == BUF_SIZE - 1);
-    reg_read_prev <= reg_read;
-    // 当缓冲区切换后，并且缓冲区有效时，单片机可以读。避免读到重复缓冲区并且保证缓冲区有效
 end
+always @(posedge adc_clk) begin
+    signal_in_prev  <= sync_signal_in;// 仅在adc_clk保持更新方波信号，否则无法检测到触发信号
+end
+
 
 // ================== 主状态机 ==================
 reg has_switched;// 确保切换过缓冲区
@@ -91,21 +72,21 @@ always @(posedge clk or negedge rst_n) begin
     end else begin
         case (current_state)
             IDLE: begin
-                if (sync_stable[1] && signal_rise && !reg_read) begin
+                if (stable && signal_in_rising && !reg_read) begin
                     current_state <= SAMPLING;
                     write_ptr     <= 0;
                 end
             end
 
             SAMPLING: begin
-                if (!sync_stable[1]) begin  // stable变低则终止
+                if (!stable) begin  // stable变低则终止
                     current_state <= IDLE;
                  end else if (adc_clk_rising) begin
                     // 写入当前缓冲区
                     if (write_buf_copy == 0)
-                        buffer0[write_ptr] <= adc_data_sync;
+                        buffer0[write_ptr] <= sync_adc_data;
                     else
-                        buffer1[write_ptr] <= adc_data_sync;
+                        buffer1[write_ptr] <= sync_adc_data;
                     
                     // 递增指针并检查是否写满
                     if (buf_full) begin
@@ -129,13 +110,9 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 
-
 // ================== 外部接口读写仲裁 ==================
-reg en_prev;
 wire en_rising = en & !en_prev;
 wire en_falling = !en & en_prev;
-wire reg_read_rising = reg_read & ~reg_read_prev;
-
 typedef enum logic [2:0] {
     FSMC_IDLE,
     FSMC_JUDGE,//准备状态
@@ -147,12 +124,10 @@ reg [DATA_WIDTH-1:0]addr;
 
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        en_prev  <= 0;
         reg_read <= 0;
         fsmc_state <= FSMC_IDLE;
         wr_data <= 16'hz;
     end else begin
-        en_prev <= en;
         case (fsmc_state)
             FSMC_IDLE: begin
                 if(en_rising)begin
@@ -204,13 +179,14 @@ always @(posedge clk or negedge rst_n) begin
             end
             default:fsmc_state <= FSMC_IDLE;
         endcase
-        
     end
 end
 
-
-always @(posedge clk) begin
-    if(reg_read_rising)begin
+wire reg_read_rising = reg_read & ~reg_read_prev;
+always @(posedge clk or negedge rst_n) begin
+    if(!rst_n)begin
+        has_switched <= 1'b0;
+    end else if(reg_read_rising)begin
         // 上升沿，表明单片机开始读取了，此时复制一下本次读取的buf
         has_switched <= 1'b0;// 重置切换标志
     end else if(current_state == SWITCH_BUF)begin
