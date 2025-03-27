@@ -2,6 +2,8 @@
 // 【功能】：子模块需要满足一定时序，某位cs片选的上升沿时，此时读取数据是地址，如果此时state为低点平，那么就是单片机写时序子模块读时序，反之~。
 //          单片机读时序子模块写时序：在state下降沿时可以写入数据，直到片选重回低电平。
 //          单片机写时序子模块读时序：在片选下降沿时可以读取数据
+// 【新想法】：内部协议“同步”时序：使用cs、addr_en、rd_en、wr_en四根线，cs表示是否片选这个模块，addr_en上升沿表示该读取地址了,rd_en表示可以读取数据了（实际是NOE下降沿）
+//          wr_en表示可以写入数据了，高电平持续期间均可以写入数据
 // 【Fmax】：331MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
@@ -22,8 +24,8 @@ module fsmc_interface #(
     // ================= 用户接口 =================
     output logic [DATA_WIDTH-1:0] rd_data,
     input  wire  [DATA_WIDTH-1:0] wr_data [NUM_MODUELS-1:0], // 数组化输入
-    output logic                  state,       // 1:读 0:写。对于独立模块来说是相反的
-    output logic [2**(ADDR_WIDTH-DATA_WIDTH)-1:0] cs
+    output logic [2**(ADDR_WIDTH-DATA_WIDTH)-1:0] cs,
+    output logic                  state      // 1:读 0:写。对于独立模块来说是相反的
 );
 
 // 信号声明

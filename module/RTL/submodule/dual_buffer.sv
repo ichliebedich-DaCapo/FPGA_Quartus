@@ -189,22 +189,22 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-// // 写数据输出控制（组合逻辑直接输出）
-// reg [DATA_WIDTH-1:0] wr_data_reg;
-// assign wr_data = (~state & en) ? wr_data_reg : {DATA_WIDTH{1'b1}};
+// 写数据输出控制（组合逻辑直接输出）
+reg [DATA_WIDTH-1:0] wr_data_reg;
+assign wr_data = (~state & en) ? wr_data_reg : {DATA_WIDTH{1'b1}};
 
-// always_ff(posedge clk or negedge rst_n)begin
-//     if(!rst_n)begin
-//     end else begin
-//         // 下降沿处读取单片机的写数据
-//         if(en_falling && state)begin
-//             case (addr)
-//                 READ_STATE_ADDR: begin
-//                     reg_read <= rd_data[0];  
-//                 end
-//             endcase
-//         end
-//     end
-// end
+always_ff(posedge clk or negedge rst_n)begin
+    if(!rst_n)begin
+    end else begin
+        // 下降沿处读取单片机的写数据
+        if(en_falling && state)begin
+            case (addr)
+                READ_STATE_ADDR: begin
+                    reg_read <= rd_data[0];  
+                end
+            endcase
+        end
+    end
+end
 
 endmodule
