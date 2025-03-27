@@ -43,9 +43,11 @@ reg stable;
 reg en;
 reg [15:0] rd_data;
 reg [15:0] wr_data;
-reg state;
 reg [DATA_WIDTH-1:0] adc_data;
 reg signal_in;
+reg rd_en;
+reg wr_en;
+reg addr_en;
 
 // 实例化被测模块
 dual_buffer uut (
@@ -59,7 +61,9 @@ dual_buffer uut (
     .sync_signal_in(signal_in),// 接电压比较器的方波信号
     // 外部模块接口
     .en(en),
-    .state(state),     // 0=读 1=写
+    .addr_en(addr_en),
+    .rd_en(rd_en),
+    .wr_en(wr_en),
     .rd_data(rd_data),    // 读数据
     .wr_data(wr_data)     // 写数据
 );
@@ -71,8 +75,10 @@ initial begin
     // 初始化所有输入信号
     signal_in = 0;
     en = 0;
+    addr_en = 0;
+    wr_en = 0;
+    rd_en = 0;
     stable =0;
-    state = 0;
     adc_data = 0;
     rd_data = 0;
 
@@ -137,30 +143,43 @@ endtask
 
 
 // 模拟FSMC读取操作
+// 向子模块读取数据，那么子模块就是写入时序
 task fsmc_read(input [15:0] addr);
 begin
-    #5;
+    @(posedge clk);
     en = 1;
-    state = 1;      // 读模式
+    addr_en = 1;
     rd_data = addr; // 地址作为输入
-    #10;
-    en =0;
-
+    @(posedge clk);
+    #3;
+    @(posedge clk);
+    addr_en = 0;
+    #5;
+    wr_en = 1;
+    #5;
+    // 在wr持续过程中读出数据
     $display("[Addr]:%0d -> %0d  buf0:%d  buf1:%d  ptr:%d buf:%d", addr, wr_data,uut.buffer0[addr],uut.buffer1[addr],uut.write_ptr,uut.write_buf);
+    #3;
+    wr_en = 0;
+    en =0;
 end
 endtask
 
+// 向子模块写入数据,字模块就是读取时序
 task fsmc_write(input [15:0] addr,input [15:0] data);
 begin
-    #5;
+    @(posedge clk);
     en = 1;
-    state = 0;      // 写模式
+    addr_en = 1;
     rd_data = addr; // 地址作为输入
-    #5;
+    @(posedge clk);
+    #3;
+    @(posedge clk);
+    rd_en = 1;
     rd_data = data;
-    #5;
+    @(posedge clk);
+    rd_en = 0;
     en = 0;
-    #5;
     $display("[W] time:%t reg_read:%d",$time,uut.reg_read);
     // $display("[Addr]:%0d <- %0d", addr, data);
 end

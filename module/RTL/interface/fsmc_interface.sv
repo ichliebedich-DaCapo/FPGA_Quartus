@@ -2,6 +2,7 @@
 // 【功能】：把FSMC异步复用时序转为内部协议，内部协议共有cs、addr_en、rd_en、wr_en四根线。单片机先输入地址，此时cs和addr_en发出一个小脉冲，然后输出地址。接下来分为读时序和写时序：
 //          读时序：rd_en发出一个小脉冲，此时可以在rd_en上升沿处读取数据
 //          写时序：在wr_en为高电平时持续输入数据。
+// 【note】：目前wr_en是短脉冲
 // 【Fmax】：359MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽

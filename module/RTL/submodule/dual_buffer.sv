@@ -10,14 +10,16 @@ module dual_buffer #(
     // 系统信号
     input  wire                  clk,
     input  wire                  rst_n,
+    input  wire                  en,
+    input  wire                  addr_en,
+    input  wire                  rd_en,     // 读使能
+    input  wire                  wr_en,     // 写使能
     // ADC信号（跨时钟域）
     input  wire                  adc_clk,
     input  wire [11:0]           sync_adc_data,// 必须是同步信号，因此需要通过同步模块
     input  wire                  stable,
     input  wire                  sync_signal_in,// 接电压比较器的方波信号   必须是同步信号，因此需要通过同步模块
     // 外部模块接口
-    input  wire                  en,
-    input  wire                  state,     // 0=读 1=写
     input  wire [DATA_WIDTH-1:0] rd_data,    // 读数据
     output reg [DATA_WIDTH-1:0] wr_data     // 写数据
 );
@@ -115,67 +117,37 @@ end
 // ================== 外部接口读写仲裁 ==================
 wire en_rising = en & !en_prev;
 wire en_falling = !en & en_prev;
-typedef enum logic [2:0] {
-    FSMC_IDLE,
-    FSMC_JUDGE,//准备状态
-    FSMC_READ,
-    FSMC_WRITE
-} FSMC_State;
-FSMC_State fsmc_state;
 reg [DATA_WIDTH-1:0]addr;
 
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        reg_read <= 0;
-        fsmc_state <= FSMC_IDLE;
-    end else begin
-        case (fsmc_state)
-            FSMC_IDLE: begin
-                if(en_rising)begin
-                    fsmc_state <= FSMC_JUDGE;
-                    addr <= rd_data;// 锁存地址
-                end
+always_ff @(posedge clk or negedge rst_n) begin
+    if(!rst_n)begin
+        reg_read <= 1'b0;
+        wr_data <= 16'hFFFF;
+    end else if(en)begin
+        // 地址操作
+        if(addr_en)begin
+            addr <= rd_data;// 锁存地址
+        end
+        // 读操作
+        if(rd_en)begin
+            reg_read <= rd_data[0];  // 读入寄存器
+        end
+        // 写操作
+        if(wr_en)begin
+            if(addr[14])begin
+                case(addr)
+                    READ_STATE_ADDR: wr_data <= {15'b0,has_switched};
+                    default:wr_data <= 16'hFFFF;
+                endcase
+            end else begin
+                if (write_buf_copy2)
+                    wr_data <= {4'b0, buffer0[addr[11:0]]}; // 填充高4位为0
+                else
+                    wr_data <= {4'b0, buffer1[addr[11:0]]}; // 填充高4位为0
             end
-            FSMC_JUDGE: begin
-                if(state)begin
-                    fsmc_state <= FSMC_WRITE;
-                end else begin
-                    fsmc_state <= FSMC_READ;
-                end
-            end
-            // 本模块读，单片机写
-            FSMC_READ: begin
-                if(en_falling)begin
-                    fsmc_state <= FSMC_IDLE;
-                    case (addr)
-                        READ_STATE_ADDR: begin
-                            reg_read <= rd_data[0];  
-                        end
-                    endcase
-                end
-            end
-            // 本模块写，单片机读
-            FSMC_WRITE: begin
-                if(~en)begin
-                    fsmc_state <= FSMC_IDLE;
-                end
-                if(addr[14])begin
-                    case(addr)
-                        READ_STATE_ADDR: wr_data <= {15'b0,has_switched};
-                        default:wr_data <= 16'hFFFF;
-                    endcase
-                end else begin
-                    if (write_buf_copy2)
-                        wr_data <= {4'b0, buffer0[addr[11:0]]}; // 填充高4位为0
-                    else
-                        wr_data <= {4'b0, buffer1[addr[11:0]]}; // 填充高4位为0
-                end
-            end
-            default:fsmc_state <= FSMC_IDLE;
-        endcase
+        end
     end
 end
-
 
 
 always @(posedge clk or negedge rst_n) begin
@@ -186,24 +158,6 @@ always @(posedge clk or negedge rst_n) begin
         has_switched <= 1'b0;// 重置切换标志
     end else if(current_state == SWITCH_BUF)begin
         has_switched <= 1'b1;// 只要切换一次即可
-    end
-end
-
-// 写数据输出控制（组合逻辑直接输出）
-reg [DATA_WIDTH-1:0] wr_data_reg;
-assign wr_data = (~state & en) ? wr_data_reg : {DATA_WIDTH{1'b1}};
-
-always_ff(posedge clk or negedge rst_n)begin
-    if(!rst_n)begin
-    end else begin
-        // 下降沿处读取单片机的写数据
-        if(en_falling && state)begin
-            case (addr)
-                READ_STATE_ADDR: begin
-                    reg_read <= rd_data[0];  
-                end
-            endcase
-        end
     end
 end
 
