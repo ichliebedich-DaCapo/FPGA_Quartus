@@ -32,10 +32,15 @@ typedef enum logic [1:0] {
 } State;
 
 State current_state;
+reg [DATA_WIDTH-1:0]addr;
 reg   write_buf;      // 当前写缓冲区 (0或1)
+reg write_buf_copy1,write_buf_copy2;
 reg  [$clog2(BUF_SIZE):0] write_ptr;
-(* ram_style = "block" *) reg  [11:0] buffer0 [BUF_SIZE];
-(* ram_style = "block" *) reg  [11:0] buffer1 [BUF_SIZE];
+reg  [$clog2(BUF_SIZE)+1:0] virtual_ptr;
+assign virtual_read_ptr = {write_buf_copy1, write_ptr};
+assign virtual_write_ptr = {write_buf_copy2, addr[11:0]};// 供ADC数据写入
+// 为了方便访问，把两块缓冲区合并为一个，通过对指针的最高位进行操作来切换缓冲区
+(* ram_style = "block" *) reg  [11:0] buffer [BUF_SIZE<<1];
 reg reg_read;// 读寄存器，高电平表明单片机开始读数据了
 reg reg_read_prev;
 
@@ -46,7 +51,7 @@ localparam READ_STATE_ADDR = 16'h4000;
 reg adc_clk_prev,stable_prev,signal_in_prev,en_prev;
 // 复制多份高扇出信号
 reg buf_full; // 标志当前缓冲区已满
-reg write_buf_copy1,write_buf_copy2;
+
 reg trigger_condition;// 触发条件
 wire adc_clk_rising = (adc_clk & ~adc_clk_prev);
 wire signal_in_rising = (sync_signal_in & ~signal_in_prev);// 与ADC_CLK同频的上升沿信号
@@ -56,7 +61,7 @@ always @(posedge clk) begin
     stable_prev <= stable;
     adc_clk_prev <= adc_clk;// adc时钟域本就由同步分频器产生，不需要额外同步
     reg_read_prev <= reg_read;
-    write_buf_copy1 <= write_buf;
+    write_buf_copy1 <= ~write_buf;
     write_buf_copy2 <= write_buf;
     buf_full <= (write_ptr > BUF_SIZE - 1);
     trigger_condition <=stable && signal_in_rising && !reg_read;
@@ -87,10 +92,7 @@ always @(posedge clk or negedge rst_n) begin
                     current_state <= IDLE;
                 end else if (adc_clk_rising) begin
                     // 写入当前缓冲区
-                    if (write_buf_copy1 == 0)
-                        buffer0[write_ptr] <= sync_adc_data;
-                    else
-                        buffer1[write_ptr] <= sync_adc_data;
+                    buffer[virtual_write_ptr]<=sync_adc_data;
                     
                     // 递增指针并检查是否写满
                     if (buf_full) begin
@@ -117,7 +119,7 @@ end
 // ================== 外部接口读写仲裁 ==================
 wire en_rising = en & !en_prev;
 wire en_falling = !en & en_prev;
-reg [DATA_WIDTH-1:0]addr;
+
 
 always_ff @(posedge clk or negedge rst_n) begin
     if(!rst_n)begin
@@ -140,10 +142,7 @@ always_ff @(posedge clk or negedge rst_n) begin
                     default:wr_data <= 16'hFFFF;
                 endcase
             end else begin
-                if (write_buf_copy2)
-                    wr_data <= {4'b0, buffer0[addr[11:0]]}; // 填充高4位为0
-                else
-                    wr_data <= {4'b0, buffer1[addr[11:0]]}; // 填充高4位为0
+                wr_data <={4'b0, buffer[virtual_read_ptr]};// 读取缓冲区
             end
         end
     end

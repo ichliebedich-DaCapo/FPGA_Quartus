@@ -158,7 +158,7 @@ begin
     wr_en = 1;
     #5;
     // 在wr持续过程中读出数据
-    $display("[Addr]:%0d -> %0d  buf0:%d  buf1:%d  ptr:%d buf:%d", addr, wr_data,uut.buffer0[addr],uut.buffer1[addr],uut.write_ptr,uut.write_buf);
+    $display("[Addr]:%0d -> %0d  buf0:%d  buf1:%d  ptr:%d buf:%d", addr, wr_data,uut.buffer[addr+1024],uut.buffer[addr+1024],uut.write_ptr,uut.write_buf);
     #3;
     wr_en = 0;
     en =0;
