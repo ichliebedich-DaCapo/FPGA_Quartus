@@ -4,7 +4,7 @@
 //          单片机写时序子模块读时序：在片选下降沿时可以读取数据
 // 【新想法】：内部协议“同步”时序：使用cs、addr_en、rd_en、wr_en四根线，cs表示是否片选这个模块，addr_en上升沿表示该读取地址了,rd_en表示可以读取数据了（实际是NOE下降沿）
 //          wr_en表示可以写入数据了，高电平持续期间均可以写入数据
-// 【Fmax】：344MHz
+// 【Fmax】：359MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
     parameter DATA_WIDTH = 16,              // 数据位宽
@@ -22,12 +22,12 @@ module fsmc_interface #(
     input         reset_n,            // 异步复位
     
     // ================= 用户接口 =================
-    output logic [DATA_WIDTH-1:0] rd_data,
+    output reg [DATA_WIDTH-1:0] rd_data,
     input  wire  [DATA_WIDTH-1:0] wr_data [NUM_MODUELS-1:0], // 数组化输入
-    output logic [2**(ADDR_WIDTH-DATA_WIDTH)-1:0] cs,
-    output logic                  addr_en,      // 1:读 0:写。对于独立模块来说是相反的
-    output logic                  rd_en,
-    output logic                  wr_en
+    output reg [2**(ADDR_WIDTH-DATA_WIDTH)-1:0] cs,
+    output reg                  addr_en,      // 1:读 0:写。对于独立模块来说是相反的
+    output reg                  rd_en,
+    output reg                  wr_en
 );
 
 // 信号声明
@@ -43,7 +43,7 @@ reg prev_output_enable;  // 新增输出使能状态寄存器
 //      - 仅仅添加一级同步链，就可以在1万次快速传输的情况下，错误率达到 0%。
 // ========================================================================
 logic [2:0] sync_chain; // [NADV, NWE, NOE]
-
+logic [ADDR_WIDTH-1:0]sync_ad_data;
 // 解包同步后信号
 logic synced_nadv, synced_nwe, synced_noe;
 assign {synced_nadv, synced_nwe, synced_noe} = sync_chain;
@@ -52,15 +52,19 @@ reg prev_nadv, prev_nwe, prev_noe;
 
 always_ff @(posedge clk) begin
     if(!reset_n) begin
+        sync_ad_data <= 18'bz;
         sync_chain <= 3'b111;  // 初始化为无效状态（对应信号高电平）
         prev_nadv <= 1'b1;
         prev_nwe <= 1'b1;
         prev_noe <= 1'b1;
+        prev_output_enable <= 1'b0;
     end else begin
+        sync_ad_data <= AD;
         sync_chain <= {NADV, NWE, NOE}; // 位拼接顺序：NADV在最高位
         prev_nadv <= synced_nadv;
         prev_nwe <= synced_nwe;
         prev_noe <= synced_noe;
+        prev_output_enable <= output_enable;  // 同步输出使能状态
     end
 end
 
@@ -80,18 +84,16 @@ always @(posedge clk or negedge reset_n) begin
         rd_en <= 1'b0;
         addr_en <= 1'b0;
     end else begin
-        addr_en <= ~synced_nadv;
         // 地址捕获
         if (nadv_rising) begin
-            rd_data <= AD[DATA_WIDTH-1:0];
-            // 片选生成
-            cs <= (1 << AD[ADDR_WIDTH-1 :DATA_WIDTH]);
+            {cs,rd_data}<=AD;
+            addr_en <= 1'b1;
             wr_state <= synced_nwe; 
         end else if(nwe_rising)begin
         // ===================
         // 单片机写数据捕获
         // ===================
-            rd_data <= AD[DATA_WIDTH-1:0];  
+            rd_data <= sync_ad_data[DATA_WIDTH-1:0];  
             rd_en <= 1'b1;
             // 读操作清除片选
             cs <= 0;
@@ -100,6 +102,7 @@ always @(posedge clk or negedge reset_n) begin
             cs <= 0;
         end else begin
             rd_en <= 1'b0;
+            addr_en <= 1'b0;
         end
     end
 end
@@ -118,37 +121,22 @@ always @(posedge clk or negedge reset_n) begin
         hold_counter <= 0;
         noe_triggered  <= 0;  // 新增触发标志
         wr_en <=0;
-    end else begin
-        prev_output_enable <= output_enable;  // 同步输出使能状态
-        
-        if (wr_state) begin  // 读操作
-            if (noe_rising) begin
-                hold_counter <= DATA_HOLD_CYCLES;
-                noe_triggered <= 1;         // 标记已触发
-                output_enable <= 1'b1;
-            end else if (noe_triggered) begin
-                if (hold_counter > 0) begin
-                    hold_counter <= hold_counter - 1;
-                    output_enable <= 1'b1; // 保持使能
-                    // 计数器结束时关闭
-                    if (hold_counter == 1) begin
-                        output_enable <= 1'b0;
-                        noe_triggered <= 0; // 清除触发标记
-                    end
-                end else begin
-                    // 计数器结束后关闭使能
-                    output_enable <= 1'b0; // 防止计数器异常
-                    wr_en <= 0;// 关闭写操作
-                end
-            end else if(noe_falling) begin
-                // 确保初始使能
-                output_enable <= 1'b1;
-                wr_en <= 1;// 模块写操作使能
-            end
-        end else begin
-            wr_en <= 0;// 关闭写操作
+    end else if (wr_state) begin  // 读操作
+        if (noe_rising) begin
+            noe_triggered <= 1;         // 标记已触发
             hold_counter <= 0;
-            noe_triggered  <= 0;          // 复位触发标志
+        end else if (noe_triggered) begin
+            hold_counter <= hold_counter + 1;  // 默认递增
+            if (hold_counter >= DATA_HOLD_CYCLES - 1) begin
+                output_enable <= 1'b0;
+                wr_en         <= 1'b0;
+                noe_triggered <= 1'b0;
+                hold_counter  <= 0;  // 复位计数器
+            end
+        end else if(noe_falling) begin
+            // 确保初始使能
+            output_enable <= 1'b1;
+            wr_en <= 1;// 模块写操作使能
         end
     end
 end

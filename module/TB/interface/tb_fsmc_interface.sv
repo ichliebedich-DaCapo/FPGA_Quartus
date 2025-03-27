@@ -65,7 +65,7 @@ end
     .NWE(nwe),
     .AD(ad),
     .rd_data(module_in),
-    .wr_data({module_out,module_out2}),
+    .wr_data({module_out2,module_out}),
     .cs(cs),
     .addr_en(addr_en),
     .rd_en(rd_en),
@@ -97,17 +97,17 @@ end
 
         // 开始测试
         // test_noise();
-        test_write();
-        test_read();
-        // test_interrupt();
+        mcu_write(0,'h1234);
+        mcu_read(0,'hFF00);
+        // mcu_interrupt();
 
         // 结束仿真
-        finsh =1;
+        #10 finsh =1;
     end
 
   
     // 写操作测试
-    task test_write;
+    task mcu_write(input [17:0] addr,input [15:0]data);
     begin
         #5;
         
@@ -115,7 +115,7 @@ end
         // 拉低地址片选
         nadv =0;
         ad_dir =1;//开始写
-        ad_out = 18'h10000;// 写入地址
+        ad_out = addr;// 写入地址
         #5;
         
 
@@ -134,7 +134,7 @@ end
         // ----------写数据------------
         // 写入数据
         ad_dir =1;
-        ad_out = 18'h0F0F;
+        ad_out = {2'b0,data};
         #10;
 
         //  写入结束
@@ -148,14 +148,14 @@ end
     end
     endtask
 
-    task test_read;
+    task mcu_read(input [17:0] addr,input [15:0]module_data);
     begin
         #5;
         
         // ----------写地址------------
         nadv =0;// 先拉低地址片选
         ad_dir =1;//开始写
-        ad_out = 18'h10000;// 写入地址
+        ad_out = addr;// 写入地址
         #6;
         
         // 拉高地址片选
@@ -163,7 +163,8 @@ end
         // 保持时间
         #4;
         ad_dir =0;
-        module_out = 16'h2321;
+        module_out = module_data;
+        module_out2 = ~module_data;
         #5;
 
 
