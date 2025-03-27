@@ -1,9 +1,7 @@
 // 【简介】：FSMC接口模块
-// 【功能】：子模块需要满足一定时序，某位cs片选的上升沿时，此时读取数据是地址，如果此时state为低点平，那么就是单片机写时序子模块读时序，反之~。
-//          单片机读时序子模块写时序：在state下降沿时可以写入数据，直到片选重回低电平。
-//          单片机写时序子模块读时序：在片选下降沿时可以读取数据
-// 【新想法】：内部协议“同步”时序：使用cs、addr_en、rd_en、wr_en四根线，cs表示是否片选这个模块，addr_en上升沿表示该读取地址了,rd_en表示可以读取数据了（实际是NOE下降沿）
-//          wr_en表示可以写入数据了，高电平持续期间均可以写入数据
+// 【功能】：把FSMC异步复用时序转为内部协议，内部协议共有cs、addr_en、rd_en、wr_en四根线。单片机先输入地址，此时cs和addr_en发出一个小脉冲，然后输出地址。接下来分为读时序和写时序：
+//          读时序：rd_en发出一个小脉冲，此时可以在rd_en上升沿处读取数据
+//          写时序：在wr_en为高电平时持续输入数据。
 // 【Fmax】：359MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
@@ -49,7 +47,7 @@ logic synced_nadv, synced_nwe, synced_noe;
 assign {synced_nadv, synced_nwe, synced_noe} = sync_chain;
 reg prev_nadv, prev_nwe, prev_noe;
 // ==================延迟===================
-
+reg write_finish;
 always_ff @(posedge clk) begin
     if(!reset_n) begin
         sync_ad_data <= 18'bz;
@@ -58,6 +56,7 @@ always_ff @(posedge clk) begin
         prev_nwe <= 1'b1;
         prev_noe <= 1'b1;
         prev_output_enable <= 1'b0;
+        write_finish <= 1'b0;
     end else begin
         sync_ad_data <= AD;
         sync_chain <= {NADV, NWE, NOE}; // 位拼接顺序：NADV在最高位
@@ -65,10 +64,12 @@ always_ff @(posedge clk) begin
         prev_nwe <= synced_nwe;
         prev_noe <= synced_noe;
         prev_output_enable <= output_enable;  // 同步输出使能状态
+        write_finish <=( hold_counter >= DATA_HOLD_CYCLES - '1);
     end
 end
 
 reg wr_state;// 读写状态
+reg cs_reg;
 // 边沿检测
 wire nadv_rising  = ~prev_nadv & synced_nadv;
 wire nadv_falling = prev_nadv & ~synced_nadv;
@@ -80,13 +81,15 @@ wire output_enable_falling = prev_output_enable & ~output_enable;
 // 地址锁存与状态控制
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
-        cs <= 1'b0;
+        cs <= '0;
+        cs_reg <= '0;
         rd_en <= 1'b0;
         addr_en <= 1'b0;
     end else begin
         // 地址捕获
         if (nadv_rising) begin
-            {cs,rd_data}<=AD;
+            {cs_reg, rd_data}<=AD;
+            cs <= 1<<AD[ADDR_WIDTH-1:DATA_WIDTH];
             addr_en <= 1'b1;
             wr_state <= synced_nwe; 
         end else if(nwe_rising)begin
@@ -96,10 +99,10 @@ always @(posedge clk or negedge reset_n) begin
             rd_data <= sync_ad_data[DATA_WIDTH-1:0];  
             rd_en <= 1'b1;
             // 读操作清除片选
-            cs <= 0;
-        end else if (output_enable_falling)begin
+            cs <= '0;
+        end else if (write_finish)begin
             // 写操作清除片选
-            cs <= 0;
+            cs <= '0;
         end else begin
             rd_en <= 1'b0;
             addr_en <= 1'b0;
@@ -117,31 +120,31 @@ end
 logic noe_triggered;
 always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
-        output_enable <= 0;
-        hold_counter <= 0;
-        noe_triggered  <= 0;  // 新增触发标志
-        wr_en <=0;
+        output_enable <= '0;
+        hold_counter <= '0;
+        noe_triggered  <= '0;  // 新增触发标志
+        wr_en <='0;
     end else if (wr_state) begin  // 读操作
         if (noe_rising) begin
-            noe_triggered <= 1;         // 标记已触发
-            hold_counter <= 0;
+            noe_triggered <= '1;         // 标记已触发
+            hold_counter <= '0;
         end else if (noe_triggered) begin
-            hold_counter <= hold_counter + 1;  // 默认递增
-            if (hold_counter >= DATA_HOLD_CYCLES - 1) begin
+            hold_counter <= hold_counter + '1;  // 默认递增
+            if (write_finish) begin
                 output_enable <= 1'b0;
                 wr_en         <= 1'b0;
                 noe_triggered <= 1'b0;
-                hold_counter  <= 0;  // 复位计数器
+                hold_counter  <= '0;  // 复位计数器
             end
         end else if(noe_falling) begin
             // 确保初始使能
             output_enable <= 1'b1;
-            wr_en <= 1;// 模块写操作使能
+            wr_en <= '1;// 模块写操作使能
         end
     end
 end
 
 // 总线驱动
-assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'bz}}, wr_data[cs]} : {ADDR_WIDTH{1'bz}};
+assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'bz}}, wr_data[cs_reg]} : {ADDR_WIDTH{1'bz}};
 
 endmodule
