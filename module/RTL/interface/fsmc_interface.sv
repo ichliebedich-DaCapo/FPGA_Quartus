@@ -4,7 +4,7 @@
 //          单片机写时序子模块读时序：在片选下降沿时可以读取数据
 // 【新想法】：内部协议“同步”时序：使用cs、addr_en、rd_en、wr_en四根线，cs表示是否片选这个模块，addr_en上升沿表示该读取地址了,rd_en表示可以读取数据了（实际是NOE下降沿）
 //          wr_en表示可以写入数据了，高电平持续期间均可以写入数据
-// 【Fmax】：364MHz
+// 【Fmax】：344MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
     parameter DATA_WIDTH = 16,              // 数据位宽
@@ -78,8 +78,9 @@ always @(posedge clk or negedge reset_n) begin
     if (!reset_n) begin
         cs <= 1'b0;
         rd_en <= 1'b0;
+        addr_en <= 1'b0;
     end else begin
-        addr_en <= synced_nadv;
+        addr_en <= ~synced_nadv;
         // 地址捕获
         if (nadv_rising) begin
             rd_data <= AD[DATA_WIDTH-1:0];

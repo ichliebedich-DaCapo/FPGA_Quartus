@@ -3,21 +3,46 @@
 
 module tb_fsmc_interface;
 
-
+// =========================================时钟周期定义======================================
+parameter                           CLK_PERIOD                = 1    ;  // 10ns时钟周期
+parameter                           HALF_CLK_PERIOD           = 0.5;
+parameter                           HALF_ADC_CLK_MULT         = 10; // ADC_CLK与CLK相差的倍数的一半
+logic clk;
+logic finsh;
+integer count;
+initial begin
+    clk = 0; // @200MHz
+    finsh = 0;
+    count =0;
+    fork
+        begin : loop_block
+            forever begin
+                #HALF_CLK_PERIOD clk = ~clk; // 每个周期翻转一次
+                if(clk)begin
+                count = count + 1;
+                end
+                if (finsh == 1'b1) begin
+                    disable loop_block; // 使用 disable 退出
+                end
+            end
+        end
+    join
+end
+// =========================================时钟周期定义======================================
 
     // 信号定义
-    logic clk;                                              // 时钟信号
     logic reset;
     logic nadv;                                             // MCU ----> 地址有效信号，低电平有效
     logic nwe;                                              // MCU ----> 写有效信号，低电平有效
     logic noe;                                              // MCU ----> 读有效信号，低电平有效
                                         // MCU <---> 地址和数据复用线 (AD17-AD0)
     logic [15:0]  module_out;                          // 内部信号，用于控制 module_ad
+    logic [15:0]  module_out2;
     logic [15:0]  module_in;
 
 
     logic [3:0]cs;
-    logic state;
+    logic addr_en,rd_en,wr_en;
 
     // 定义线
     logic ad_dir;
@@ -40,24 +65,15 @@ module tb_fsmc_interface;
     .NWE(nwe),
     .AD(ad),
     .rd_data(module_in),
-    .wr_data(module_out),
+    .wr_data({module_out,module_out2}),
     .cs(cs),
-    .state(state),
+    .addr_en(addr_en),
+    .rd_en(rd_en),
+    .wr_en(wr_en),
     .reset_n(reset)
     );
 
-    // 时钟周期定义
-    parameter                           CLK_PERIOD                = 1    ;  // 10ns时钟周期
-    parameter                           HALF_CLK_PERIOD           = 0.5;
-    integer count;
-    // 时钟生成
-    initial begin
-        clk = 0; 
-        // forever #HALF_CLK_PERIOD clk = ~clk;                        // 每个周期翻转一次
-        for (count = 0; count < 100; count = count + 1) begin
-            #HALF_CLK_PERIOD clk = ~clk; // 每个周期翻转一次
-        end
-    end
+
 
     // 初始设置
     initial begin
@@ -67,7 +83,10 @@ module tb_fsmc_interface;
         nwe = 1'b1;
         noe = 1'b1;
         ad_dir =0;
-        module_out = 0;
+        module_out = 'z;
+        module_out2 = 'z;
+        module_in ='z;
+        ad_out = 18'bz;
         #2;
 
         // 释放复位
@@ -83,7 +102,7 @@ module tb_fsmc_interface;
         // test_interrupt();
 
         // 结束仿真
-        // $stop;
+        finsh =1;
     end
 
   
