@@ -48,6 +48,9 @@ reg signal_in;
 reg rd_en;
 reg wr_en;
 reg addr_en;
+reg rd_en;
+reg wr_en;
+reg addr_en;
 
 // 实例化被测模块
 dual_buffer uut (
@@ -64,6 +67,9 @@ dual_buffer uut (
     .addr_en(addr_en),
     .rd_en(rd_en),
     .wr_en(wr_en),
+    .addr_en(addr_en),
+    .rd_en(rd_en),
+    .wr_en(wr_en),
     .rd_data(rd_data),    // 读数据
     .wr_data(wr_data)     // 写数据
 );
@@ -75,6 +81,9 @@ initial begin
     // 初始化所有输入信号
     signal_in = 0;
     en = 0;
+    addr_en = 0;
+    wr_en = 0;
+    rd_en = 0;
     addr_en = 0;
     wr_en = 0;
     rd_en = 0;
@@ -146,8 +155,10 @@ endtask
 
 // 模拟FSMC读取操作
 // 向子模块读取数据，那么子模块就是写入时序
+// 向子模块读取数据，那么子模块就是写入时序
 task fsmc_read(input [15:0] addr);
 begin
+    @(posedge clk);
     @(posedge clk);
     en = 1;
     rd_data = addr; // 地址作为输入
@@ -173,8 +184,10 @@ end
 endtask
 
 // 向子模块写入数据,字模块就是读取时序
+// 向子模块写入数据,字模块就是读取时序
 task fsmc_write(input [15:0] addr,input [15:0] data);
 begin
+    @(posedge clk);
     @(posedge clk);
     en = 1;
     rd_data = addr; // 地址作为输入

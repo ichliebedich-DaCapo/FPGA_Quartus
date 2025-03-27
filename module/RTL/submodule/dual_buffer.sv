@@ -1,11 +1,9 @@
 // 【简介】：双缓冲子模块
 // 【功能】：根据稳定信号，从ADC读取数据，使用双缓冲机制。同时添加了触发机制，只在电压比较器处于上升沿时开始读取。
 // 【Fmax】：272MHz
-// 【Fmax】：272MHz
 // 【note】：单片机如果想要读取数据，先读取READ_STATE_ADDR处的数据，如果为1，那么久可以读取了。
 //          然后需要对READ_STATE_ADDR地址处写入1，然后读取，读取完之后，再写入0，表示读取完成。
 module dual_buffer #(
-    parameter DATA_WIDTH = 16,    // 输入数据位宽
     parameter DATA_WIDTH = 16,    // 输入数据位宽
     parameter BUF_SIZE   = 1024   // 缓冲区大小（深度），需要改后面的地址
 )(
@@ -36,16 +34,10 @@ typedef enum logic [1:0] {
 State current_state;
 reg [DATA_WIDTH-1:0]addr;
 reg   write_buf;      // 当前写缓冲区 (0或1)
-reg write_buf_write,write_buf_read;
-reg  [$clog2(BUF_SIZE)-1:0] write_ptr;
-wire  [$clog2(BUF_SIZE*2)-1:0] virtual_write_ptr;
-wire  [$clog2(BUF_SIZE*2)-1:0] virtual_read_ptr;
-assign virtual_write_ptr = {write_buf_write, write_ptr};// 供ADC数据写入
-assign virtual_read_ptr = {write_buf_read, addr[$clog2(BUF_SIZE)-1:0]};
-// 为了方便访问，把两块缓冲区合并为一个，通过对指针的最高位进行操作来切换缓冲区
-(* ram_style = "block" *) reg  [11:0] buffer [BUF_SIZE*2];
-reg [$clog2(BUF_SIZE*2)-1:0] write_addr;  // 写地址
-reg [$clog2(BUF_SIZE*2)-1:0] read_addr;   // 读地址
+reg write_buf_copy1,write_buf_copy2;
+reg  [$clog2(BUF_SIZE):0] write_ptr;
+(* ram_style = "block" *) reg  [11:0] buffer0 [BUF_SIZE];
+(* ram_style = "block" *) reg  [11:0] buffer1 [BUF_SIZE];
 
 reg reg_read;// 读寄存器，高电平表明单片机开始读数据了
 reg reg_read_prev;
@@ -65,13 +57,11 @@ wire reg_read_rising = reg_read & ~reg_read_prev;
 always @(posedge clk) begin
     adc_clk_prev <= adc_clk;// adc时钟域本就由同步分频器产生，不需要额外同步
     reg_read_prev <= reg_read;
-    write_buf_write <= write_buf;
-    write_buf_read <= ~write_buf;
+    write_buf_copy1 <= write_buf;
+    write_buf_copy2 <= write_buf;
     buf_full <= (write_ptr == BUF_SIZE - 1);
     trigger_condition <=stable && signal_in_rising && !reg_read;
     signal_in_prev  <= sync_signal_in;// 仅在adc_clk保持更新方波信号，否则无法检测到触发信号
-    read_addr <= virtual_read_ptr;  // 锁存读地址
-    write_addr <= virtual_write_ptr;
 end
 
 
@@ -98,7 +88,10 @@ always @(posedge clk or negedge rst_n) begin
                     current_state <= IDLE;
                 end else if (adc_clk_rising) begin
                     // 写入当前缓冲区
-                    buffer[write_addr]<=sync_adc_data;
+                    if (write_buf_copy)
+                        buffer1[write_ptr] <= sync_adc_data;
+                    else
+                        buffer0[write_ptr] <= sync_adc_data;
                     
                     // 递增指针并检查是否写满
                     if (buf_full) begin
@@ -145,7 +138,12 @@ always_ff @(posedge clk or negedge rst_n) begin
         if(wr_en)begin
             casez(addr)
                 READ_STATE_ADDR:wr_data <= {15'b0,has_switched};
-                16'h0???:wr_data <={4'b0, buffer[read_addr]};// 读取缓冲区
+                16'h0???:begin
+                    if (write_buf_copy2)
+                        wr_data <= {4'b0, buffer0[addr[11:0]]}; // 填充高4位为0
+                    else
+                        wr_data <= {4'b0, buffer1[addr[11:0]]}; // 填充高4位为0
+                end
                 default:wr_data <= 16'hFFFF;
             endcase
         end
