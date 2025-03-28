@@ -29,12 +29,12 @@ wire [3:0] cs;
 wire addr_en, rd_en, wr_en;
 
 // ---------子模块信号---------
-wire div;
-wire sync_adc_data;// 同步后的ADC数据
+wire [11:0]div;
+wire[11:0] sync_adc_data;// 同步后的ADC数据
 reg sync_signal_in;
 wire gain_stable,freq_stable,freq_detector_stable;
 wire stable = gain_stable & freq_stable;
-wire period;
+wire [17:0]period;
 
 //  同步模块
 always @(posedge clk) begin
@@ -86,7 +86,8 @@ wave_information wave_info(
     .rd_data(rd_data),
     .wr_data(wr_data_1),
     .div(div),
-    .gain_ctrl(gain_ctrl)
+    .gain_ctrl(gain_ctrl),
+    .period(period)
 );
 
 // ===================================接口/内部模块======================================

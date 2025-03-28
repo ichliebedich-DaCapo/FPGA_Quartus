@@ -77,7 +77,6 @@ initial begin
     NOE = 1'b1;
     adc_data = 0;
     signal_in = 0;
-    gain_ctrl = 'z;
     #10 rst_n = 1'b0;
     #10 rst_n = 1'b1;
 
