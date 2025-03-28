@@ -36,9 +36,19 @@ wire gain_stable,freq_stable,freq_detector_stable;
 wire stable = gain_stable & freq_stable;
 wire [17:0]period;
 
+// ---------锁相信号---------
+wire clk_200,clk_48,locked;
+pll_c0_200_c1_48	pll(
+	.areset (rst_n),
+	.inclk0 ( clk ),
+	.c0 ( clk_200 ),
+	.c1 ( clk_48 ),
+	.locked ( locked )
+);
+
 //  同步模块
 always @(posedge clk) begin
-    sync_rst_n <= rst_n;
+    sync_rst_n <= rst_n & locked;
     sync_signal_in <= signal_in;
 end
 
@@ -48,7 +58,7 @@ fsmc_interface fsmc(
     .NADV(NADV),
     .NWE(NWE),
     .NOE(NOE),
-    .clk(clk),
+    .clk(clk_200),
     .rst_n(sync_rst_n),
     .rd_data(rd_data),
     .wr_data_array('{wr_data_1,wr_data_0}),// 起始放在右边
@@ -61,7 +71,7 @@ fsmc_interface fsmc(
 // ===================================子模块======================================
 // --------双缓冲模块--------
 dual_buffer dual_buffer(
-    .clk(clk),
+    .clk(clk_200),
     .rst_n(sync_rst_n),
     .en(cs[0]),
     .addr_en(addr_en),
@@ -77,7 +87,7 @@ dual_buffer dual_buffer(
 
 // --------波形信息模块--------
 wave_information wave_info(
-    .clk(clk),
+    .clk(clk_200),
     .rst_n(sync_rst_n),
     .en(cs[1]),
     .addr_en(addr_en),
@@ -95,7 +105,7 @@ wave_information wave_info(
 
 // --------增益程控模块--------
 auto_gain_control auto_gain_ctrl(
-    .clk(clk),
+    .clk(clk_200),
     .adc_clk(adc_clk),
     .rst_n(sync_rst_n),
     .adc_data(sync_adc_data),
@@ -105,7 +115,7 @@ auto_gain_control auto_gain_ctrl(
 
 // --------频率控制模块--------
 freq_control freq_control(
-    .clk(clk),
+    .clk(clk_200),
     .rst_n(sync_rst_n),
     .en(freq_detector_stable),
     .period(period),
@@ -114,7 +124,7 @@ freq_control freq_control(
 );
 // 频率检测模块
 freq_detector_square freq_detector(
-    .clk(clk),
+    .clk(clk_200),
     .rst_n(sync_rst_n),
     .signal_in(signal_in),
     .period(period),
@@ -132,7 +142,7 @@ adc_interface adc_interface(
 
 // --------分频器模块--------
 divider divider(
-    .clk(clk),
+    .clk(clk_48),
     .rst_n(sync_rst_n),
     .div(div),
     .adc_clk(adc_clk)
