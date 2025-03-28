@@ -85,7 +85,7 @@ always @(posedge clk or negedge rst_n) begin
     end else if (adc_clk_changed) begin
         watchdog_counter <= 0;  // 检测到时钟活动时重置
     end else if (watchdog_counter < WATCHDOG_TIMEOUT) begin
-        watchdog_counter <= watchdog_counter + 1'b1;
+        watchdog_counter <= watchdog_counter + 1;
     end
 end
 
@@ -116,7 +116,7 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                 // 检查过压条件
                 if (adc_data >= OVER_VOLTAGE_THRESHOLD) begin
                     // 调低增益
-                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - '1 : current_gain_idx;
+                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1 : current_gain_idx;
                     state <= ADJUST;
                     stable <= 0;    // 不稳定
                 end else begin
@@ -130,7 +130,7 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                     if (sample_count == SAMPLE_WINDOW_SIZE-1)
                         state <= EVALUATE;
                     else 
-                        sample_count <= sample_count + '1;
+                        sample_count <= sample_count + 1;
                 end
             end
             // 评估结果
@@ -138,11 +138,11 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                 // 比较峰值
                 if (peak > GAIN_LIMITS[current_gain_idx].upper) begin
                     // 调低增益
-                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - '1 : current_gain_idx;
+                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1 : current_gain_idx;
                     state <= ADJUST;
                 end else if (peak < GAIN_LIMITS[current_gain_idx].lower) begin
                     // 调高增益
-                    next_gain_idx <= (current_gain_idx < GAIN_29_25) ? current_gain_idx + '1 : current_gain_idx;
+                    next_gain_idx <= (current_gain_idx < GAIN_29_25) ? current_gain_idx + 1 : current_gain_idx;
                     state <= ADJUST;
                 end else begin
                     // 无需调整，重新采样
@@ -159,16 +159,16 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                 current_gain_idx <= next_gain_idx;
                 // 设置继电器控制信号
                 relay_ctrl <= GAIN_MAP[next_gain_idx];
-                stable <= '0;// 不稳定
+                stable <= 0;// 不稳定
                 state <= WAIT_STABLE;
             end
 
             WAIT_STABLE: begin
                 if (wait_counter >=WAIT_STABLE_DELAY) begin
                     state <= RESET;
-                    stable <= '1;// 标记为稳定，等下轮评估结果再决定稳不稳定                
+                    stable <= 1;// 标记为稳定，等下轮评估结果再决定稳不稳定                
                 end else begin
-                    wait_counter <= wait_counter + '1;
+                    wait_counter <= wait_counter + 1;
                 end
             end
 

@@ -34,10 +34,10 @@ always @(posedge clk or negedge rst_n) begin
         cycle_cnt <= 0;
         captured_cycle <= 0;
     end else if (signal_posedge) begin
-        captured_cycle <= cycle_cnt + '1; // 补偿计数+1
+        captured_cycle <= cycle_cnt + 1; // 补偿计数+1
         cycle_cnt <= 0;
     end else begin
-        cycle_cnt <= cycle_cnt + '1;
+        cycle_cnt <= cycle_cnt + 1;
     end
 end
 

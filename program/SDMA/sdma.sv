@@ -1,6 +1,6 @@
 // 【简介】：信号失真度检测模块
 // 【功能】：可供单片机读取信号的周期、增益、频率控制和周期，也可连续读取1024个ADC数据
-// 【Fmax】：
+// 【Fmax】：232MHz
 module sdma(
     // ================= 物理接口 =================
     inout  [17:0] AD,                   // 复用地址/数据总线
@@ -51,7 +51,7 @@ fsmc_interface fsmc(
     .clk(clk),
     .rst_n(sync_rst_n),
     .rd_data(rd_data),
-    .wr_data_array('{wr_data_1,wr_data_0}),
+    .wr_data_array('{wr_data_0,wr_data_1}),
     .cs(cs)
 );
 
