@@ -149,7 +149,6 @@ endtask
 task fsmc_read(input [15:0] addr);
 begin
     @(posedge clk);
-    @(posedge clk);
     en = 1;
     rd_data = addr; // 地址作为输入
     @(posedge clk);
@@ -177,7 +176,6 @@ endtask
 // 向子模块写入数据,字模块就是读取时序
 task fsmc_write(input [15:0] addr,input [15:0] data);
 begin
-    @(posedge clk);
     @(posedge clk);
     en = 1;
     rd_data = addr; // 地址作为输入

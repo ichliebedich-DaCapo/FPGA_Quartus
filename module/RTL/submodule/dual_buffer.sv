@@ -35,7 +35,7 @@ State current_state;
 reg [DATA_WIDTH-1:0]addr;
 reg   write_buf;      // 当前写缓冲区 (0或1)
 reg write_buf_copy1,write_buf_copy2;
-reg  [$clog2(BUF_SIZE):0] write_ptr;
+reg  [$clog2(BUF_SIZE)-1:0] write_ptr;
 (* ram_style = "block" *) reg  [11:0] buffer0 [BUF_SIZE];
 (* ram_style = "block" *) reg  [11:0] buffer1 [BUF_SIZE];
 
