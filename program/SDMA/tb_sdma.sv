@@ -64,22 +64,23 @@ sdma sdma(
 );
 
 // --------------------显现内部信号----------------------------
-wire cs;
-wire [15:0]buf_addr;
-wire [15:0]reg_read;
-wire [15:0]rd_data;
-wire [15:0]wr_data_0;//,wr_data_1;
-wire addr_en;
+// wire cs;
+// wire [15:0]buf_addr;
+// wire [15:0]reg_read;
+// wire [15:0]rd_data;
+// wire [15:0]wr_data_0;//,wr_data_1;
+// wire addr_en;
 
-wire rd_en;
-assign cs =  sdma.fsmc.cs[0];
-assign rd_data = sdma.fsmc.rd_data;
-assign wr_data_0 = sdma.fsmc.wr_data_array[0];
-// assign wr_data_1 = sdma.fsmc.wr_data_array[1];
-assign addr_en = sdma.addr_en;
-assign rd_en = sdma.rd_en;
-assign buf_addr = sdma.dual_buffer.addr;
-assign reg_read = sdma.dual_buffer.reg_read;
+// wire rd_en;
+// assign cs =  sdma.fsmc.cs[0];
+// assign rd_data = sdma.fsmc.rd_data;
+// assign wr_data_0 = sdma.fsmc.wr_data_array[0];
+// // assign wr_data_1 = sdma.fsmc.wr_data_array[1];
+// assign addr_en = sdma.addr_en;
+// assign rd_en = sdma.rd_en;
+// assign buf_addr = sdma.dual_buffer.addr;
+// assign reg_read = sdma.dual_buffer.reg_read;
+
 // ===================初始设置==================
 initial begin
     rst_n = 1'b1;
@@ -97,11 +98,14 @@ initial begin
 
     $display("==================test:1==================");
     read_data();
-    // $display("==================test:2==================");
-    // read_data();
-    // $display("==================test:3==================");
-    // read_data();
-    
+    #20;
+    $display("==================test:2==================");
+    read_data();
+    $display("==================test:3==================");
+    read_data();
+
+    $display("==================test:Read Info==================");
+    read_info();
 
     // 结束仿真 
     finsh = 1'b1;
@@ -140,13 +144,27 @@ endtask
 // 读取数据
 task read_data();
 begin
-    wait(sdma.dual_buffer.has_switched)
+    wait(sdma.dual_buffer.has_switched);
     $display("%t--> ready to read data : ptr:%d",$time,sdma.dual_buffer.write_ptr);
     mcu_write(READ_STATE_ADDR,1);// 写入0，表示正在读取
     for (int i=0; i<BUF_SIZE; i++) begin
         mcu_read(i);
     end
     mcu_write(READ_STATE_ADDR,0);// 写入0，表示读取完成
+end
+endtask
+
+// 读取信息
+task read_info();
+begin
+    wait(sdma.dual_buffer.has_switched);
+    mcu_read(18'b01_0000_0000_0000_0000);
+    #10;
+    mcu_read(18'b01_0000_0000_0000_0001);
+    #10;
+    mcu_read(18'b01_0000_0000_0000_0010);
+    #10;
+    mcu_read(18'b01_0000_0000_0000_0011);
 end
 endtask
 
@@ -209,7 +227,11 @@ begin
     #8;
     @(posedge clk);
     NOE =1;
-    // $display("[%d]_R:%d reg_read:%d buf0:%d buf1:%d ptr:%d",$time,ad_in[15:0],sdma.dual_buffer.reg_read,sdma.dual_buffer.buffer0[addr],sdma.dual_buffer.buffer1[addr],sdma.dual_buffer.write_ptr);
+    if(addr[16])begin
+        $display("[%d]_R:%d->%h  div:%d gain:%d period:%h",$time,addr,ad_in[15:0],sdma.div,sdma.gain_ctrl,sdma.period);
+    end else begin
+        $display("[%d]_R:%d reg_read:%d buf0:%d buf1:%d ptr:%d",$time,addr,sdma.dual_buffer.reg_read,sdma.dual_buffer.buffer0[addr],sdma.dual_buffer.buffer1[addr],sdma.dual_buffer.write_ptr);
+    end
     #8;
 end
 endtask
@@ -217,13 +239,12 @@ endtask
 
 // ==============================监测内部变量===============================
 initial begin
-
-    // $monitor("time:%t switch:%d  buf:%d reg_read:%d div:%d gain:%d gain_sb:%d freq_sb:%D",$time,sdma.dual_buffer.has_switched,sdma.dual_buffer.write_buf,
-    // sdma.dual_buffer.reg_read,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable
-    // );
+    $monitor("time:%t switch:%d  buf:%d reg_read:%d div:%d gain:%d gain_sb:%d freq_sb:%D",$time,sdma.dual_buffer.has_switched,sdma.dual_buffer.write_buf,
+    sdma.dual_buffer.reg_read,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable
+    );
     // $monitor("[%t] rd:%D wr:%d %d cs:%d",$time,sdma.fsmc.rd_data,sdma.fsmc.wr_data_array[0],sdma.fsmc.wr_data_array[1],sdma.fsmc.cs
     // );
-    $monitor("[%d]reg_read:%d",$time,sdma.dual_buffer.reg_read,);
+    // $monitor("[%d]reg_read:%d",$time,sdma.dual_buffer.reg_read,);
 end
 
 endmodule
