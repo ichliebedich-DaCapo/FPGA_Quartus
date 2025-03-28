@@ -1,10 +1,10 @@
 // 【简介】：双缓冲子模块
 // 【功能】：根据稳定信号，从ADC读取数据，使用双缓冲机制。同时添加了触发机制，只在电压比较器处于上升沿时开始读取。
-// 【Fmax】：316.66MHz
+// 【Fmax】：272MHz
 // 【note】：单片机如果想要读取数据，先读取READ_STATE_ADDR处的数据，如果为1，那么久可以读取了。
 //          然后需要对READ_STATE_ADDR地址处写入1，然后读取，读取完之后，再写入0，表示读取完成。
 module dual_buffer #(
-    parameter DATA_WIDTH = 16,    // 数据位宽
+    parameter DATA_WIDTH = 16,    // 输入数据位宽
     parameter BUF_SIZE   = 1024   // 缓冲区大小（深度），需要改后面的地址
 )(
     // 系统信号
@@ -34,13 +34,17 @@ typedef enum logic [1:0] {
 State current_state;
 reg [DATA_WIDTH-1:0]addr;
 reg   write_buf;      // 当前写缓冲区 (0或1)
-reg write_buf_copy1,write_buf_copy2;
-reg  [$clog2(BUF_SIZE):0] write_ptr;
-reg  [$clog2(BUF_SIZE)+1:0] virtual_ptr;
-assign virtual_write_ptr = {write_buf_copy1, write_ptr[$clog2(BUF_SIZE)-1:0]};// 供ADC数据写入
-assign virtual_read_ptr = {write_buf_copy2, addr[$clog2(BUF_SIZE)-1:0]};
+reg write_buf_write,write_buf_read;
+reg  [$clog2(BUF_SIZE)-1:0] write_ptr;
+wire  [$clog2(BUF_SIZE*2)-1:0] virtual_write_ptr;
+wire  [$clog2(BUF_SIZE*2)-1:0] virtual_read_ptr;
+assign virtual_write_ptr = {write_buf_write, write_ptr};// 供ADC数据写入
+assign virtual_read_ptr = {write_buf_read, addr[$clog2(BUF_SIZE)-1:0]};
 // 为了方便访问，把两块缓冲区合并为一个，通过对指针的最高位进行操作来切换缓冲区
 (* ram_style = "block" *) reg  [11:0] buffer [BUF_SIZE*2];
+reg [$clog2(BUF_SIZE*2)-1:0] write_addr;  // 写地址
+reg [$clog2(BUF_SIZE*2)-1:0] read_addr;   // 读地址
+
 reg reg_read;// 读寄存器，高电平表明单片机开始读数据了
 reg reg_read_prev;
 
@@ -48,7 +52,7 @@ reg reg_read_prev;
 localparam READ_STATE_ADDR = 16'h4000;
 
 // ================== 边沿检测 ==================
-reg adc_clk_prev,stable_prev,signal_in_prev,en_prev;
+reg adc_clk_prev,signal_in_prev;
 // 复制多份高扇出信号
 reg buf_full; // 标志当前缓冲区已满
 
@@ -57,18 +61,17 @@ wire adc_clk_rising = (adc_clk & ~adc_clk_prev);
 wire signal_in_rising = (sync_signal_in & ~signal_in_prev);// 与ADC_CLK同频的上升沿信号
 wire reg_read_rising = reg_read & ~reg_read_prev;
 always @(posedge clk) begin
-    en_prev <= en;
-    stable_prev <= stable;
     adc_clk_prev <= adc_clk;// adc时钟域本就由同步分频器产生，不需要额外同步
     reg_read_prev <= reg_read;
-    write_buf_copy1 <= write_buf;
-    write_buf_copy2 <= ~write_buf;
-    buf_full <= (write_ptr >= BUF_SIZE - 1);
+    write_buf_write <= write_buf;
+    write_buf_read <= ~write_buf;
+    buf_full <= (write_ptr == BUF_SIZE - 1);
     trigger_condition <=stable && signal_in_rising && !reg_read;
-end
-always @(posedge adc_clk) begin
     signal_in_prev  <= sync_signal_in;// 仅在adc_clk保持更新方波信号，否则无法检测到触发信号
+    read_addr <= virtual_read_ptr;  // 锁存读地址
+    write_addr <= virtual_write_ptr;
 end
+
 
 
 // ================== 主状态机 ==================
@@ -92,7 +95,7 @@ always @(posedge clk or negedge rst_n) begin
                     current_state <= IDLE;
                 end else if (adc_clk_rising) begin
                     // 写入当前缓冲区
-                    buffer[virtual_write_ptr]<=sync_adc_data;
+                    buffer[write_addr]<=sync_adc_data;
                     
                     // 递增指针并检查是否写满
                     if (buf_full) begin
@@ -117,10 +120,6 @@ end
 
 
 // ================== 外部接口读写仲裁 ==================
-wire en_rising = en & !en_prev;
-wire en_falling = !en & en_prev;
-
-
 always_ff @(posedge clk or negedge rst_n) begin
     if(!rst_n)begin
         reg_read <= 1'b0;
@@ -132,30 +131,32 @@ always_ff @(posedge clk or negedge rst_n) begin
         end
         // 读操作
         if(rd_en)begin
-            reg_read <= rd_data[0];  // 读入寄存器
+            // 把单片机要写入的数据存储起来，用于判断是否可以切换缓冲区
+            if(addr==READ_STATE_ADDR)
+                reg_read <= rd_data[0];  
         end
         // 写操作
         if(wr_en)begin
-            if(addr[14])begin
-                case(addr)
-                    READ_STATE_ADDR: wr_data <= {15'b0,has_switched};
-                    default:wr_data <= 16'hFFFF;
-                endcase
-            end else begin
-                wr_data <={4'b0, buffer[virtual_read_ptr]};// 读取缓冲区
-            end
+            casez(addr)
+                READ_STATE_ADDR:wr_data <= {15'b0,has_switched};
+                16'h0???:wr_data <={4'b0, buffer[read_addr]};// 读取缓冲区
+                default:wr_data <= 16'hFFFF;
+            endcase
         end
     end
 end
 
-
+/*
+ *  仲裁
+ *  @note：确保单片机不会连续读取两次相同的缓冲区。只要开始读，那么必须等到切换至少一次缓冲区后才能读。
+*/
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n)begin
         has_switched <= 1'b0;
     end else if(reg_read_rising)begin
-        // 上升沿，表明单片机开始读取了，此时复制一下本次读取的buf
+        // 上升沿，表明单片机开始读取了，此时需要重置切换标志，确保下一次读取时不会不会重复
         has_switched <= 1'b0;// 重置切换标志
-    end else if(current_state == SWITCH_BUF)begin
+    end else if(current_state == SWITCH_BUF && !reg_read)begin
         has_switched <= 1'b1;// 只要切换一次即可
     end
 end

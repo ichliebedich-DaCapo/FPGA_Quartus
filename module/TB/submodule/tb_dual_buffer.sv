@@ -89,9 +89,9 @@ initial begin
     $display("==================test:1==================");
     read_data();
     $display("==================test:2==================");
-    read_data();
-    $display("==================test:3==================");
-    read_data();
+    // read_data();
+    // $display("==================test:3==================");
+    // read_data();
     
 
     #100;
@@ -116,13 +116,15 @@ begin
     // 启动采集条件
     signal_in =0;
     #10 stable = 1;
-    @(posedge adc_clk);
+    @(posedge clk);
     signal_in = 1;
+    @(posedge clk);
     
     // 生成ADC数据（简单递增模式）
     for (int i=0; i<BUF_SIZE; i++) begin
         adc_data = i[11:0]+offset;
         @(posedge adc_clk);
+        $display("[%d] ADC_DATA:%d data:%d wr_buf:%d ptr:%d virtual_ptr:%d buf:%d",count,adc_data,uut.sync_adc_data,uut.write_buf_write,uut.write_ptr,uut.virtual_write_ptr,uut.buffer[uut.virtual_write_ptr]);
     end
 end
 endtask
@@ -131,7 +133,7 @@ endtask
 task read_data();
 begin
     wait(uut.has_switched)
-    $display("------------> read data");
+    $display("%d--> ready to read data : ptr:%d",count,uut.write_ptr);
     fsmc_read(READ_STATE_ADDR);// 获取状态
     fsmc_write(READ_STATE_ADDR,1);// 写入1，表示正在读取
     for (int i=0; i<BUF_SIZE; i++) begin
@@ -148,19 +150,25 @@ task fsmc_read(input [15:0] addr);
 begin
     @(posedge clk);
     en = 1;
-    addr_en = 1;
     rd_data = addr; // 地址作为输入
     @(posedge clk);
-    addr_en = 0;
+    addr_en = 1;
     @(posedge clk);
-    #5;
+    addr_en = 0;
+    #6;
+    // -----读取数据-----
     wr_en = 1;
     #5;
     // 在wr持续过程中读出数据
-    $display("[Addr]:%0d -> %0d  buf0:%d  buf1:%d  ptr:%d buf:%d", addr, wr_data,uut.buffer[addr],uut.buffer[addr+1024],uut.write_ptr,uut.write_buf);
+    if(addr == READ_STATE_ADDR)begin
+        $display("data:%d switch:%d",wr_data,uut.has_switched);
+    end else begin
+        $display("[%0d]: -> %0d  buf0:%d  buf1:%d  ptr:%d wr_buf:%d rd_buf:%d", addr, wr_data,uut.buffer[addr],uut.buffer[addr+1024],uut.write_ptr,uut.write_buf_write,uut.write_buf_read);
+    end
     #3;
     wr_en = 0;
     en =0;
+    @(posedge clk);
 end
 endtask
 
@@ -169,12 +177,13 @@ task fsmc_write(input [15:0] addr,input [15:0] data);
 begin
     @(posedge clk);
     en = 1;
-    addr_en = 1;
     rd_data = addr; // 地址作为输入
     @(posedge clk);
-    addr_en = 0;
+    addr_en = 1;
     @(posedge clk);
-    // 写入数据供模块读取
+    addr_en = 0;
+    #6;
+    // -----写入数据供模块读取-----
     rd_data = data;
     @(posedge clk);
     @(posedge clk);
@@ -185,7 +194,6 @@ begin
     @(posedge clk);
     @(posedge clk);
     $display("[W] time:%t reg_read:%d",$time,uut.reg_read);
-    // $display("[Addr]:%0d <- %0d", addr, data);
 end
 endtask
 
