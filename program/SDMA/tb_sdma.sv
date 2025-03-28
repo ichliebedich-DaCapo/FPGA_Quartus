@@ -1,22 +1,19 @@
 `timescale 1ns/1ps  // 时间单位=1ns，时间精度=1ps   锁相环模块添加这个，所以这里也必须添加
 module tb_sdma;
-
 // =========================================时钟周期定义======================================
 parameter                           CLK_PERIOD                = 1    ;  // 10ns时钟周期
 parameter                           HALF_CLK_PERIOD           = 0.5;
 logic clk;
 logic finsh;
-integer count;
 initial begin
+    $timeformat(-9, 0, "", 6);
     clk = 0; // @200MHz
     finsh = 0;
-    count =0;
     fork
         begin : loop_block
             forever begin
                 #HALF_CLK_PERIOD clk = ~clk; // 每个周期翻转一次
                 if(clk)begin
-                    count = count + 1;
                 end
                 if (finsh == 1'b1) begin
                     disable loop_block; // 使用 disable 退出
@@ -89,7 +86,7 @@ initial begin
     // read_data();
     
 
-    #10000;
+    wait(0);
     // 结束仿真 
     finsh = 1'b1;
 end
@@ -97,7 +94,7 @@ end
 // ======================================ADC数据生成==========================================
 initial begin
     #20;
-    for (int i = 0; i < 100; i++) begin
+    for (int i = 0; i < 10; i++) begin
         generate_adc(i*10);
         #10;
     end
@@ -110,6 +107,7 @@ end
 task generate_adc(input [11:0] offset = 0);
 begin
     // 启动采集条件
+    @(posedge clk);
     signal_in =0;
     @(posedge clk);
     signal_in = 1;
@@ -117,7 +115,7 @@ begin
     
     // 生成ADC数据（简单递增模式）
     for (int i=0; i<BUF_SIZE; i++) begin
-        adc_data = i[11:0]+offset;
+        adc_data = 1800+i>>6;
         @(posedge adc_clk);
     end
 end
@@ -206,7 +204,11 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    // $monitor("time:%t switch:%d  buf:%d reg_read:%d",$time,uut.has_switched,uut.write_buf,uut.reg_read);
+    // $monitor("time:%t switch:%d  buf:%d reg_read:%d div:%d gain:%d gain_sb:%d freq_sb:%D",$time,sdma.dual_buffer.has_switched,sdma.dual_buffer.write_buf,
+    // sdma.dual_buffer.reg_read,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable
+    // );
+    $monitor("time:%t div:%d gain:%d gain_sb:%d freq_sb:%d sb:%d",$time,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable,sdma.stable
+    );
 end
 
 endmodule
