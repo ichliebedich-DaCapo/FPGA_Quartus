@@ -52,7 +52,10 @@ fsmc_interface fsmc(
     .rst_n(sync_rst_n),
     .rd_data(rd_data),
     .wr_data_array('{wr_data_0,wr_data_1}),
-    .cs(cs)
+    .cs(cs),
+    .addr_en(addr_en),
+    .rd_en(rd_en),
+    .wr_en(wr_en)
 );
 
 // ===================================子模块======================================
