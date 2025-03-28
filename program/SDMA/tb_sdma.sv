@@ -78,12 +78,12 @@ initial begin
     #10 rst_n = 1'b1;
 
 
-    // $display("==================test:1==================");
-    // read_data();
-    // $display("==================test:2==================");
-    // read_data();
-    // $display("==================test:3==================");
-    // read_data();
+    $display("==================test:1==================");
+    read_data();
+    $display("==================test:2==================");
+    read_data();
+    $display("==================test:3==================");
+    read_data();
     
 
     wait(0);
@@ -122,18 +122,17 @@ end
 endtask
     
 // 读取数据
-// task read_data();
-// begin
-//     wait(uut.has_switched)
-//     $display("%d--> ready to read data : ptr:%d",count,uut.write_ptr);
-//     fsmc_read(READ_STATE_ADDR);// 获取状态
-//     fsmc_write(READ_STATE_ADDR,1);// 写入1，表示正在读取
-//     for (int i=0; i<BUF_SIZE; i++) begin
-//         fsmc_read(i);
-//     end
-//     fsmc_write(READ_STATE_ADDR,0);// 写入0，表示读取完成
-// end
-// endtask
+task read_data();
+begin
+    wait(sdma.dual_buffer.has_switched)
+    $display("%t--> ready to read data : ptr:%d",$time,sdma.dual_buffer.write_ptr);
+    mcu_write(READ_STATE_ADDR,1);// 写入0，表示正在读取
+    for (int i=0; i<BUF_SIZE; i++) begin
+        mcu_read(i);
+    end
+    mcu_write(READ_STATE_ADDR,0);// 写入0，表示读取完成
+end
+endtask
 
 // 写操作测试
 task mcu_write(input [17:0] addr,input [15:0]data);
@@ -167,12 +166,12 @@ begin
     // 保持时间
     #3;
     ad_dir =0;
-    $display("---------->[data]:%h",ad_in);
+    $display("[W]:%d reg_read:%d",ad_in[15:0],sdma.dual_buffer.reg_read);
     #8;
 end
 endtask
 
-task mcu_read(input [17:0] addr,input [15:0]module_data);
+task mcu_read(input [17:0] addr);
 begin
     #5;
     // ----------写地址------------
@@ -186,16 +185,15 @@ begin
     // 保持时间
     #4;
     ad_dir =0;
-    ad_out = module_data;
     #5;
 
     // ----------读数据------------
     // 拉低NOE
     NOE =0;
     #8;
+    @(posedge clk);
     NOE =1;
-    #1;
-    $display("---------->[data]:%h",ad_in);
+    $display("[Read]:%d reg_read:%d buf0:%d buf1:%d ptr:%d",ad_in[15:0],sdma.dual_buffer.reg_read,sdma.dual_buffer.buffer0[addr],sdma.dual_buffer.buffer1[addr],sdma.dual_buffer.write_ptr);
     #8;
 end
 endtask
