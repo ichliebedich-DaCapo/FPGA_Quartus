@@ -14,14 +14,13 @@ module dual_buffer #(
     input  wire                  addr_en,
     input  wire                  rd_en,     // 读使能
     input  wire                  wr_en,     // 写使能
-    // ADC信号（跨时钟域）
+    input  wire [DATA_WIDTH-1:0] rd_data,    // 读数据
+    output reg [DATA_WIDTH-1:0] wr_data,     // 写数据
+    // ADC信号
     input  wire                  adc_clk,
     input  wire [11:0]           sync_adc_data,// 必须是同步信号，因此需要通过同步模块
     input  wire                  stable,
-    input  wire                  sync_signal_in,// 接电压比较器的方波信号   必须是同步信号，因此需要通过同步模块
-    // 外部模块接口
-    input  wire [DATA_WIDTH-1:0] rd_data,    // 读数据
-    output reg [DATA_WIDTH-1:0] wr_data     // 写数据
+    input  wire                  sync_signal_in// 接电压比较器的方波信号   必须是同步信号，因此需要通过同步模块
 );
 
 // ================== 状态机与缓冲区定义 ==================
