@@ -1,6 +1,6 @@
 // 【简介】：双缓冲子模块
 // 【功能】：根据稳定信号，从ADC读取数据，使用双缓冲机制。同时添加了触发机制，只在电压比较器处于上升沿时开始读取。
-// 【Fmax】：170MHz
+// 【Fmax】：257MHz
 // 【note】：单片机如果想要读取数据，先读取READ_STATE_ADDR处的数据，如果为1，那么久可以读取了。
 //          然后需要对READ_STATE_ADDR地址处写入1，然后读取，读取完之后，再写入0，表示读取完成。
 module dual_buffer #(
@@ -116,6 +116,24 @@ end
 
 
 // ================== 外部接口读写仲裁 ==================
+// 增加输出寄存器级
+// 【优化】：添加了这块，让时序从172MHz提升至257MHz
+reg [11:0] buffer_rd_data;
+reg [DATA_WIDTH-1:0] wr_data_reg;
+
+always_ff @(posedge clk) begin
+    // 第一阶段：提前选择buffer
+    if(write_buf_copy2)
+        buffer_rd_data <= buffer0[addr[11:0]];
+    else 
+        buffer_rd_data <= buffer1[addr[11:0]];
+        
+    // 第二阶段：拼接数据
+    wr_data_reg <= {4'b0, buffer_rd_data};
+end
+
+
+
 always_ff @(posedge clk or negedge rst_n) begin
     if(!rst_n)begin
         reg_read <= 1'b0;
@@ -135,12 +153,7 @@ always_ff @(posedge clk or negedge rst_n) begin
         if(wr_en)begin
             casez(addr)
                 READ_STATE_ADDR:wr_data <= {15'b0,has_switched};
-                16'h0???:begin
-                    if (write_buf_copy2)
-                        wr_data <= {4'b0, buffer0[addr[11:0]]}; // 填充高4位为0
-                    else
-                        wr_data <= {4'b0, buffer1[addr[11:0]]}; // 填充高4位为0
-                end
+                16'h0???:wr_data <= wr_data_reg;
                 default:wr_data <= 16'hFFFF;
             endcase
         end
