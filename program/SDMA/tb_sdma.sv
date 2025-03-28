@@ -115,7 +115,7 @@ begin
     
     // 生成ADC数据（简单递增模式）
     for (int i=0; i<BUF_SIZE; i++) begin
-        adc_data = 1800+i>>6;
+        adc_data = 2000+(i>>6);
         @(posedge adc_clk);
     end
 end
@@ -204,11 +204,11 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    // $monitor("time:%t switch:%d  buf:%d reg_read:%d div:%d gain:%d gain_sb:%d freq_sb:%D",$time,sdma.dual_buffer.has_switched,sdma.dual_buffer.write_buf,
-    // sdma.dual_buffer.reg_read,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable
-    // );
-    $monitor("time:%t div:%d gain:%d gain_sb:%d freq_sb:%d sb:%d",$time,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable,sdma.stable
+    $monitor("time:%t switch:%d  buf:%d reg_read:%d div:%d gain:%d gain_sb:%d freq_sb:%D",$time,sdma.dual_buffer.has_switched,sdma.dual_buffer.write_buf,
+    sdma.dual_buffer.reg_read,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable
     );
+    // $monitor("time:%t div:%d gain:%d gain_sb:%d freq_sb:%d sb:%d",$time,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable,sdma.stable
+    // );
 end
 
 endmodule
