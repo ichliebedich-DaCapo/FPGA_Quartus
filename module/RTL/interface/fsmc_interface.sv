@@ -49,7 +49,7 @@ assign {synced_nadv, synced_nwe, synced_noe} = sync_chain;
 reg prev_nadv, prev_nwe, prev_noe;
 // ==================延迟===================
 reg write_finish;
-always_ff @(posedge clk) begin
+always_ff @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
         sync_ad_data <= 18'bz;
         sync_chain <= 3'b111;  // 初始化为无效状态（对应信号高电平）
@@ -86,6 +86,7 @@ always @(posedge clk or negedge rst_n) begin
         cs_reg <= '0;
         rd_en <= 1'b0;
         addr_en <= 1'b0;
+        rd_data = '0;
     end else begin
         // 地址捕获
         if (nadv_rising) begin
@@ -99,13 +100,14 @@ always @(posedge clk or negedge rst_n) begin
         // ===================
             rd_data <= sync_ad_data[DATA_WIDTH-1:0];  
             rd_en <= 1'b1;
-            // 读操作清除片选
+        end else if (rd_en) begin
+             // 读操作清除片选
             cs <= '0;
+            rd_en <= 1'b0;
         end else if (write_finish)begin
             // 写操作清除片选
             cs <= '0;
         end else begin
-            rd_en <= 1'b0;
             addr_en <= 1'b0;
         end
     end

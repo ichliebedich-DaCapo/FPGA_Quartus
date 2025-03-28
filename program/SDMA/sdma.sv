@@ -51,7 +51,7 @@ fsmc_interface fsmc(
     .clk(clk),
     .rst_n(sync_rst_n),
     .rd_data(rd_data),
-    .wr_data_array('{wr_data_0,wr_data_1}),
+    .wr_data_array('{wr_data_1,wr_data_0}),// 起始放在右边
     .cs(cs),
     .addr_en(addr_en),
     .rd_en(rd_en),

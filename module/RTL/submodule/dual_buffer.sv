@@ -135,7 +135,8 @@ end
 
 always_ff @(posedge clk or negedge rst_n) begin
     if(!rst_n)begin
-        reg_read <= 1'b0;
+        reg_read <= '0;
+        addr <= 16'h0;
         wr_data <= 16'hFFFF;
     end else if(en)begin
         // 地址操作
@@ -144,7 +145,14 @@ always_ff @(posedge clk or negedge rst_n) begin
         end
         // 读操作
         if(rd_en)begin
+            // case组合逻辑，只有一个clk延迟
             // 把单片机要写入的数据存储起来，用于判断是否可以切换缓冲区
+            // case(addr)
+            //     READ_STATE_ADDR:reg_read <= rd_data[0];
+            //     default:reg_read <= 16'hFFF0;
+            // endcase
+            
+            // 由于有两个if语句，所以会有两个clk的延迟
             if(addr==READ_STATE_ADDR)
                 reg_read <= rd_data[0];  
         end

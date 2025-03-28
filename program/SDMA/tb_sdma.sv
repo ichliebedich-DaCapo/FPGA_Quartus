@@ -63,6 +63,23 @@ sdma sdma(
     .ADC_OE(ADC_OE)
 );
 
+// --------------------显现内部信号----------------------------
+wire cs;
+wire [15:0]buf_addr;
+wire [15:0]reg_read;
+wire [15:0]rd_data;
+wire [15:0]wr_data_0;//,wr_data_1;
+wire addr_en;
+
+wire rd_en;
+assign cs =  sdma.fsmc.cs[0];
+assign rd_data = sdma.fsmc.rd_data;
+assign wr_data_0 = sdma.fsmc.wr_data_array[0];
+// assign wr_data_1 = sdma.fsmc.wr_data_array[1];
+assign addr_en = sdma.addr_en;
+assign rd_en = sdma.rd_en;
+assign buf_addr = sdma.dual_buffer.addr;
+assign reg_read = sdma.dual_buffer.reg_read;
 // ===================初始设置==================
 initial begin
     rst_n = 1'b1;
@@ -80,13 +97,12 @@ initial begin
 
     $display("==================test:1==================");
     read_data();
-    $display("==================test:2==================");
-    read_data();
-    $display("==================test:3==================");
-    read_data();
+    // $display("==================test:2==================");
+    // read_data();
+    // $display("==================test:3==================");
+    // read_data();
     
 
-    wait(0);
     // 结束仿真 
     finsh = 1'b1;
 end
@@ -166,7 +182,7 @@ begin
     // 保持时间
     #3;
     ad_dir =0;
-    $display("[W]:%d reg_read:%d",ad_in[15:0],sdma.dual_buffer.reg_read);
+    $display("[%d]_W:%d reg_read:%d",$time,ad_in[15:0],sdma.dual_buffer.reg_read);
     #8;
 end
 endtask
@@ -193,7 +209,7 @@ begin
     #8;
     @(posedge clk);
     NOE =1;
-    $display("[Read]:%d reg_read:%d buf0:%d buf1:%d ptr:%d",ad_in[15:0],sdma.dual_buffer.reg_read,sdma.dual_buffer.buffer0[addr],sdma.dual_buffer.buffer1[addr],sdma.dual_buffer.write_ptr);
+    // $display("[%d]_R:%d reg_read:%d buf0:%d buf1:%d ptr:%d",$time,ad_in[15:0],sdma.dual_buffer.reg_read,sdma.dual_buffer.buffer0[addr],sdma.dual_buffer.buffer1[addr],sdma.dual_buffer.write_ptr);
     #8;
 end
 endtask
@@ -201,12 +217,13 @@ endtask
 
 // ==============================监测内部变量===============================
 initial begin
-    // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time:%t switch:%d  buf:%d reg_read:%d div:%d gain:%d gain_sb:%d freq_sb:%D",$time,sdma.dual_buffer.has_switched,sdma.dual_buffer.write_buf,
-    sdma.dual_buffer.reg_read,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable
-    );
-    // $monitor("time:%t div:%d gain:%d gain_sb:%d freq_sb:%d sb:%d",$time,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable,sdma.stable
+
+    // $monitor("time:%t switch:%d  buf:%d reg_read:%d div:%d gain:%d gain_sb:%d freq_sb:%D",$time,sdma.dual_buffer.has_switched,sdma.dual_buffer.write_buf,
+    // sdma.dual_buffer.reg_read,sdma.div,sdma.gain_ctrl,sdma.gain_stable,sdma.freq_stable
     // );
+    // $monitor("[%t] rd:%D wr:%d %d cs:%d",$time,sdma.fsmc.rd_data,sdma.fsmc.wr_data_array[0],sdma.fsmc.wr_data_array[1],sdma.fsmc.cs
+    // );
+    $monitor("[%d]reg_read:%d",$time,sdma.dual_buffer.reg_read,);
 end
 
 endmodule
