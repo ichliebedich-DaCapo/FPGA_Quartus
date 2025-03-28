@@ -48,9 +48,6 @@ reg signal_in;
 reg rd_en;
 reg wr_en;
 reg addr_en;
-reg rd_en;
-reg wr_en;
-reg addr_en;
 
 // 实例化被测模块
 dual_buffer uut (
@@ -64,9 +61,6 @@ dual_buffer uut (
     .sync_signal_in(signal_in),// 接电压比较器的方波信号
     // 外部模块接口
     .en(en),
-    .addr_en(addr_en),
-    .rd_en(rd_en),
-    .wr_en(wr_en),
     .addr_en(addr_en),
     .rd_en(rd_en),
     .wr_en(wr_en),
@@ -84,9 +78,6 @@ initial begin
     addr_en = 0;
     wr_en = 0;
     rd_en = 0;
-    addr_en = 0;
-    wr_en = 0;
-    rd_en = 0;
     stable =0;
     adc_data = 0;
     rd_data = 0;
@@ -98,9 +89,9 @@ initial begin
     $display("==================test:1==================");
     read_data();
     $display("==================test:2==================");
-    // read_data();
-    // $display("==================test:3==================");
-    // read_data();
+    read_data();
+    $display("==================test:3==================");
+    read_data();
     
 
     #100;
@@ -133,7 +124,6 @@ begin
     for (int i=0; i<BUF_SIZE; i++) begin
         adc_data = i[11:0]+offset;
         @(posedge adc_clk);
-        $display("[%d] ADC_DATA:%d data:%d wr_buf:%d ptr:%d virtual_ptr:%d buf:%d",count,adc_data,uut.sync_adc_data,uut.write_buf_write,uut.write_ptr,uut.virtual_write_ptr,uut.buffer[uut.virtual_write_ptr]);
     end
 end
 endtask
@@ -174,7 +164,7 @@ begin
     if(addr == READ_STATE_ADDR)begin
         $display("data:%d switch:%d",wr_data,uut.has_switched);
     end else begin
-        $display("[%0d]: -> %0d  buf0:%d  buf1:%d  ptr:%d wr_buf:%d rd_buf:%d", addr, wr_data,uut.buffer[addr],uut.buffer[addr+1024],uut.write_ptr,uut.write_buf_write,uut.write_buf_read);
+        $display("[%0d]: -> %0d  buf0:%d  buf1:%d  ptr:%d", addr, wr_data,uut.buffer0[addr],uut.buffer1[addr],uut.write_ptr);
     end
     #3;
     wr_en = 0;
