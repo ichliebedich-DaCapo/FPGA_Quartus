@@ -73,9 +73,11 @@ reg wr_state;// 读写状态
 reg cs_reg;
 // 边沿检测
 wire nadv_rising  = ~prev_nadv & synced_nadv;
+wire nadv_falling = prev_nadv & ~synced_nadv;
 wire nwe_rising   = ~prev_nwe  & synced_nwe;
 wire noe_rising   = ~prev_noe  & synced_noe;
 wire noe_falling  = prev_noe  & ~synced_noe;
+wire output_enable_falling = prev_output_enable & ~output_enable;
 
 // 地址锁存与状态控制
 always @(posedge clk or negedge rst_n) begin
@@ -89,7 +91,7 @@ always @(posedge clk or negedge rst_n) begin
         // 地址捕获
         if (nadv_rising) begin
             {cs_reg, rd_data}<=AD;
-            cs <= 1<<AD[ADDR_WIDTH-1'b1:DATA_WIDTH];
+            cs <= 1<<AD[ADDR_WIDTH-1:DATA_WIDTH];
             addr_en <= 1'b1;
             wr_state <= synced_nwe; 
         end else if(nwe_rising)begin
