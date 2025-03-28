@@ -135,7 +135,7 @@ begin
     
     // 生成ADC数据（简单递增模式）
     for (int i=0; i<BUF_SIZE; i++) begin
-        adc_data = 2000+(i>>6);
+        adc_data = 2000+(i%1000)+offset;
         @(posedge adc_clk);
     end
 end
@@ -230,7 +230,7 @@ begin
     if(addr[16])begin
         $display("[%d]_R:%d->%h  div:%d gain:%d period:%h",$time,addr,ad_in[15:0],sdma.div,sdma.gain_ctrl,sdma.period);
     end else begin
-        $display("[%d]_R:%d reg_read:%d buf0:%d buf1:%d ptr:%d",$time,addr,sdma.dual_buffer.reg_read,sdma.dual_buffer.buffer0[addr],sdma.dual_buffer.buffer1[addr],sdma.dual_buffer.write_ptr);
+        $display("[%d]_R:%d->%d reg_read:%d buf0:%d buf1:%d ptr:%d",$time,addr,ad_in[15:0],sdma.dual_buffer.reg_read,sdma.dual_buffer.buffer0[addr],sdma.dual_buffer.buffer1[addr],sdma.dual_buffer.write_ptr);
     end
     #8;
 end

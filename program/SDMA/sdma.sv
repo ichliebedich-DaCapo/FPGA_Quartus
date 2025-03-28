@@ -39,7 +39,7 @@ wire [17:0]period;
 // ---------锁相信号---------
 wire clk_200,clk_48,locked;
 pll_c0_200_c1_48	pll(
-	.areset (rst_n),
+	.areset (~rst_n),
 	.inclk0 ( clk ),
 	.c0 ( clk_200 ),
 	.c1 ( clk_48 ),
