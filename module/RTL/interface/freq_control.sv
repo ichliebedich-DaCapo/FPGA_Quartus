@@ -1,6 +1,6 @@
 // 【简介】频率控制模块
 // 【Fmax】：266.1MHz
-// 【表格】：
+// 【表格】：需要主时钟达到48MHz
 //         区间范围    采样率          分频系数
 //        [1K,2K)     24K             1000
 //        [2K,4K)     48K             500
@@ -15,7 +15,7 @@ module freq_control #(
 ) (
     input clk,
     input rst_n,
-    input en,
+    input en,// 稳定信号，频率检测均为稳定的信号
     input [COUNTER_WIDTH-1:0] period,
     output reg [DIV_WIDTH-1:0] div,
     output reg stable

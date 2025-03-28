@@ -18,11 +18,11 @@ module fsmc_interface #(
     
     // ================= 系统接口 =================
     input         clk,                // 主时钟
-    input         reset_n,            // 异步复位
+    input         rst_n,            // 异步复位
     
     // ================= 用户接口 =================
     output reg [DATA_WIDTH-1:0] rd_data,
-    input  wire  [DATA_WIDTH-1:0] wr_data [NUM_MODUELS-1:0], // 数组化输入
+    input  wire  [DATA_WIDTH-1:0] wr_data_array [NUM_MODUELS-1:0], // 数组化输入
     output reg [2**(ADDR_WIDTH-DATA_WIDTH)-1:0] cs,
     output reg                  addr_en,      // 1:读 0:写。对于独立模块来说是相反的
     output reg                  rd_en,
@@ -50,7 +50,7 @@ reg prev_nadv, prev_nwe, prev_noe;
 // ==================延迟===================
 reg write_finish;
 always_ff @(posedge clk) begin
-    if(!reset_n) begin
+    if(!rst_n) begin
         sync_ad_data <= 18'bz;
         sync_chain <= 3'b111;  // 初始化为无效状态（对应信号高电平）
         prev_nadv <= 1'b1;
@@ -80,8 +80,8 @@ wire noe_falling  = prev_noe  & ~synced_noe;
 wire output_enable_falling = prev_output_enable & ~output_enable;
 
 // 地址锁存与状态控制
-always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         cs <= '0;
         cs_reg <= '0;
         rd_en <= 1'b0;
@@ -119,8 +119,8 @@ end
 //  -由于正确情况下读操作的state正好为高电平，其他情况均为低电平，所以这个可以作为控制信号
 // =============================================================================
 logic noe_triggered;
-always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         output_enable <= '0;
         hold_counter <= '0;
         noe_triggered  <= '0;  // 新增触发标志
@@ -146,6 +146,6 @@ always @(posedge clk or negedge reset_n) begin
 end
 
 // 总线驱动
-assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'bz}}, wr_data[cs_reg]} : {ADDR_WIDTH{1'bz}};
+assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'bz}}, wr_data_array[cs_reg]} : {ADDR_WIDTH{1'bz}};
 
 endmodule
