@@ -1,9 +1,11 @@
 // 【简介】：双缓冲子模块
 // 【功能】：根据稳定信号，从ADC读取数据，使用双缓冲机制。同时添加了触发机制，只在电压比较器处于上升沿时开始读取。
 // 【Fmax】：272MHz
+// 【Fmax】：272MHz
 // 【note】：单片机如果想要读取数据，先读取READ_STATE_ADDR处的数据，如果为1，那么久可以读取了。
 //          然后需要对READ_STATE_ADDR地址处写入1，然后读取，读取完之后，再写入0，表示读取完成。
 module dual_buffer #(
+    parameter DATA_WIDTH = 16,    // 输入数据位宽
     parameter DATA_WIDTH = 16,    // 输入数据位宽
     parameter BUF_SIZE   = 1024   // 缓冲区大小（深度），需要改后面的地址
 )(
@@ -74,6 +76,7 @@ end
 
 
 
+
 // ================== 主状态机 ==================
 reg has_switched;// 确保切换过缓冲区
 always @(posedge clk or negedge rst_n) begin
@@ -134,6 +137,9 @@ always_ff @(posedge clk or negedge rst_n) begin
             // 把单片机要写入的数据存储起来，用于判断是否可以切换缓冲区
             if(addr==READ_STATE_ADDR)
                 reg_read <= rd_data[0];  
+            // 把单片机要写入的数据存储起来，用于判断是否可以切换缓冲区
+            if(addr==READ_STATE_ADDR)
+                reg_read <= rd_data[0];  
         end
         // 写操作
         if(wr_en)begin
@@ -155,7 +161,9 @@ always @(posedge clk or negedge rst_n) begin
         has_switched <= 1'b0;
     end else if(reg_read_rising)begin
         // 上升沿，表明单片机开始读取了，此时需要重置切换标志，确保下一次读取时不会不会重复
+        // 上升沿，表明单片机开始读取了，此时需要重置切换标志，确保下一次读取时不会不会重复
         has_switched <= 1'b0;// 重置切换标志
+    end else if(current_state == SWITCH_BUF && !reg_read)begin
     end else if(current_state == SWITCH_BUF && !reg_read)begin
         has_switched <= 1'b1;// 只要切换一次即可
     end
