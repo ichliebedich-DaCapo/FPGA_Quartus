@@ -37,10 +37,10 @@ reg   write_buf;      // 当前写缓冲区 (0或1)
 reg write_buf_copy1,write_buf_copy2;
 reg  [$clog2(BUF_SIZE):0] write_ptr;
 reg  [$clog2(BUF_SIZE)+1:0] virtual_ptr;
-assign virtual_read_ptr = {write_buf_copy1, write_ptr};
-assign virtual_write_ptr = {write_buf_copy2, addr[11:0]};// 供ADC数据写入
+assign virtual_write_ptr = {write_buf_copy1, write_ptr[$clog2(BUF_SIZE)-1:0]};// 供ADC数据写入
+assign virtual_read_ptr = {write_buf_copy2, addr[$clog2(BUF_SIZE)-1:0]};
 // 为了方便访问，把两块缓冲区合并为一个，通过对指针的最高位进行操作来切换缓冲区
-(* ram_style = "block" *) reg  [11:0] buffer [BUF_SIZE<<1];
+(* ram_style = "block" *) reg  [11:0] buffer [BUF_SIZE*2];
 reg reg_read;// 读寄存器，高电平表明单片机开始读数据了
 reg reg_read_prev;
 
@@ -61,9 +61,9 @@ always @(posedge clk) begin
     stable_prev <= stable;
     adc_clk_prev <= adc_clk;// adc时钟域本就由同步分频器产生，不需要额外同步
     reg_read_prev <= reg_read;
-    write_buf_copy1 <= ~write_buf;
-    write_buf_copy2 <= write_buf;
-    buf_full <= (write_ptr > BUF_SIZE - 1);
+    write_buf_copy1 <= write_buf;
+    write_buf_copy2 <= ~write_buf;
+    buf_full <= (write_ptr >= BUF_SIZE - 1);
     trigger_condition <=stable && signal_in_rising && !reg_read;
 end
 always @(posedge adc_clk) begin

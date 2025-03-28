@@ -151,14 +151,13 @@ begin
     addr_en = 1;
     rd_data = addr; // 地址作为输入
     @(posedge clk);
-    #3;
-    @(posedge clk);
     addr_en = 0;
+    @(posedge clk);
     #5;
     wr_en = 1;
     #5;
     // 在wr持续过程中读出数据
-    $display("[Addr]:%0d -> %0d  buf0:%d  buf1:%d  ptr:%d buf:%d", addr, wr_data,uut.buffer[addr+1024],uut.buffer[addr+1024],uut.write_ptr,uut.write_buf);
+    $display("[Addr]:%0d -> %0d  buf0:%d  buf1:%d  ptr:%d buf:%d", addr, wr_data,uut.buffer[addr],uut.buffer[addr+1024],uut.write_ptr,uut.write_buf);
     #3;
     wr_en = 0;
     en =0;
@@ -173,13 +172,18 @@ begin
     addr_en = 1;
     rd_data = addr; // 地址作为输入
     @(posedge clk);
-    #3;
+    addr_en = 0;
+    @(posedge clk);
+    // 写入数据供模块读取
+    rd_data = data;
+    @(posedge clk);
     @(posedge clk);
     rd_en = 1;
-    rd_data = data;
     @(posedge clk);
     rd_en = 0;
     en = 0;
+    @(posedge clk);
+    @(posedge clk);
     $display("[W] time:%t reg_read:%d",$time,uut.reg_read);
     // $display("[Addr]:%0d <- %0d", addr, data);
 end
