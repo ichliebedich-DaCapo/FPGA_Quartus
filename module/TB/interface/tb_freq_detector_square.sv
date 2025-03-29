@@ -93,14 +93,15 @@ endtask
 task generate_signal(input int half_period, input int cycles);
     begin
         repeat(cycles) begin
-            signal_in = ~signal_in;
+            signal_in = 0;
             repeat(half_period)begin
                 @(negedge clk);
             end
-            signal_in = ~signal_in;
+            signal_in = 1;
             repeat(half_period)begin
                 @(negedge clk);
             end
+            signal_in = 0;
         end
     end
 endtask
