@@ -36,7 +36,7 @@ reg [DIV_WIDTH-1:0] div_new;
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         en_prev <= 1'b0;
-        FREQ_1600K <= 15;  // 初始分频系数设为15,确保ADC可以检测指定区间的任何信号
+        div <= FREQ_1600K;  // 初始分频系数设为15,确保ADC可以检测指定区间的任何信号
         stable <= 1'b1;
     end else begin
         en_prev <= en;  // 更新en_prev
