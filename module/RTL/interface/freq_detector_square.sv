@@ -2,7 +2,7 @@
 // 【Fmax】：246MHz
 // 【note】：输入信号为1K~100K，考虑到信号并不是很高，如果使用等精度测量法会有相当大的延迟，于是使用了周期测量法。
 //  并且由于Fmax达到200MHz以上，那么这个模块可以很轻松地连接上200MHz的时钟。
-// 【details】：周期误差为δ，待测信号实际频率为f，那么测得频率 f' = (200M)/(200M+δ*f)*f
+// 【details】：周期误差为δ，待测信号实际频率为f，那么测得频率 f' = (200M)/(200M+δ*f)*f，由于噪声存在，输入信号的不同频率对这个阈值的要求也不同
 //              δf = 20M →  f'误差:-9.1%~11.1%   δ:500~20K
 //              δf = 10M →  f'误差:-4.7%~5.3%    δ:250~10K
 module freq_detector_square #(
@@ -12,21 +12,16 @@ module freq_detector_square #(
 )(
     input               clk,    
     input               rst_n,       // 异步复位
-    input               signal_in,    // 输入方波信号
+    input               signal_in,    // 输入的是已经同步后的方波信号
     output reg  [COUNTER_WIDTH-1:0] period,// 周期计数器输出
     output reg stable   // 稳定标志，高电平表示频率稳定
 );
 
-// 边沿检测优化（增加打拍减少亚稳态）
-reg [1:0] signal_sync;
-reg signal_posedge;
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        signal_sync <= 2'b00;
-    end else begin
-        signal_sync <= {signal_sync[0], signal_in};
-        signal_posedge <= (signal_sync[1] & ~signal_sync[0]);
-    end
+// 边沿检测
+reg signal_in_prev;
+wire signal_posedge = ~signal_in_prev & signal_in;
+always @(posedge clk) begin
+    signal_in_prev <= signal_in;
 end
 
 // 周期计数器（优化位宽减少逻辑延迟）

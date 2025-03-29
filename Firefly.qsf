@@ -38,7 +38,7 @@
 
 set_global_assignment -name FAMILY "Cyclone IV E"
 set_global_assignment -name DEVICE EP4CE6E22C8
-set_global_assignment -name TOP_LEVEL_ENTITY sdma
+set_global_assignment -name TOP_LEVEL_ENTITY freq_detector_square
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 18.0.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "16:02:24  DECEMBER 28, 2024"
 set_global_assignment -name LAST_QUARTUS_VERSION "18.0.0 Standard Edition"
@@ -139,9 +139,6 @@ set_global_assignment -name EDA_TEST_BENCH_NAME tb_sdma -section_id eda_simulati
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id tb_sdma
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_sdma -section_id tb_sdma
 set_global_assignment -name EDA_TEST_BENCH_FILE program/SDMA/tb_sdma.sv -section_id tb_sdma
-set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
-set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
-set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
 set_global_assignment -name QIP_FILE IP/PLL_c0_200_c1_48/pll_c0_200_c1_48.qip
 set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/freq_detector_square.sv
 set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/freq_control.sv
@@ -171,4 +168,7 @@ set_location_assignment PIN_111 -to gain_ctrl[1]
 set_location_assignment PIN_110 -to gain_ctrl[0]
 set_location_assignment PIN_91 -to signal_in
 set_location_assignment PIN_64 -to rst_n
+set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
+set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
+set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
