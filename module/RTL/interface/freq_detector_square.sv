@@ -2,9 +2,12 @@
 // 【Fmax】：246MHz
 // 【note】：输入信号为1K~100K，考虑到信号并不是很高，如果使用等精度测量法会有相当大的延迟，于是使用了周期测量法。
 //  并且由于Fmax达到200MHz以上，那么这个模块可以很轻松地连接上200MHz的时钟。
+// 【details】：周期误差为δ，待测信号实际频率为f，那么测得频率 f' = (200M)/(200M+δ*f)*f
+//              δf = 20M →  f'误差:-9.1%~11.1%   δ:500~20K
+//              δf = 10M →  f'误差:-4.7%~5.3%    δ:250~10K
 module freq_detector_square #(
     parameter STABLE_CYCLES = 4,// 
-    parameter THRESHOLD = 1, // 允许的最大周期差
+    parameter THRESHOLD = 250, // 允许的最大周期差
     parameter COUNTER_WIDTH  = 18     // 根据200MHz/1kHz=200_000计算（2^18=262,144）
 )(
     input               clk,    
