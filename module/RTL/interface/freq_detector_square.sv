@@ -37,14 +37,14 @@ end
 //━━━━━━━━━━━━━━ 周期计数器（边沿触发重置）━━━━━━━━━━━━━━━
 reg [COUNTER_WIDTH-1:0] cycle_cnt;
 reg [COUNTER_WIDTH-1:0] captured_cycle;
-
+reg [COUNTER_WIDTH-1:0] captured_cycle_copy;
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         cycle_cnt <= 0;
         captured_cycle <= 0;
     end else if (signal_posedge) begin
-        captured_cycle <= cycle_cnt;    // 保存当前计数值
-        cycle_cnt <= '1;                 // 重置时补偿当前周期（+1在else分支）
+        captured_cycle <= cycle_cnt;    // 保存当前计数值，此处若补偿还会少1
+        cycle_cnt <= 0;                 // 修正：重置为0而非全1，否则还会少1
     end else begin
         cycle_cnt <= cycle_cnt + 1'b1;  // 持续计数
     end
@@ -60,7 +60,7 @@ always @(posedge clk or negedge rst_n) begin
         period_buf[3] <= 0;
     end else if (signal_posedge) begin
         // 手动实现移位寄存器
-        period_buf[3] <= captured_cycle;  // 新值插入最高位
+        period_buf[3] <= captured_cycle_copy;  // 新值插入最高位
         period_buf[2] <= period_buf[3];   // 原[3]→[2]
         period_buf[1] <= period_buf[2];   // 原[2]→[1]
         period_buf[0] <= period_buf[1];   // 原[1]→[0]
@@ -147,6 +147,7 @@ end
 always_ff@(posedge clk)begin
     period <= avg_period;        // 输出平均周期
     stable <= (stable_cnt == STABLE_CYCLES);
+    captured_cycle_copy <= captured_cycle +'1;// 补偿
 end
 
 endmodule
