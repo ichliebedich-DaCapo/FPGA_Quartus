@@ -20,6 +20,13 @@ module freq_control #(
     output reg [DIV_WIDTH-1:0] div,
     output reg stable
 );
+localparam FREQ_24K = 999;
+localparam FREQ_48K = 499;
+localparam FREQ_96K = 249;
+localparam FREQ_192K = 124;
+localparam FREQ_400K = 59;
+localparam FREQ_800K = 29;
+localparam FREQ_1600K = 14;
 
 reg en_prev;  // 用于检测en的上升沿
 
@@ -29,7 +36,7 @@ reg [DIV_WIDTH-1:0] div_new;
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
         en_prev <= 1'b0;
-        div <= 15;  // 初始分频系数设为15,确保ADC可以检测指定区间的任何信号
+        FREQ_1600K <= 15;  // 初始分频系数设为15,确保ADC可以检测指定区间的任何信号
         stable <= 1'b1;
     end else begin
         en_prev <= en;  // 更新en_prev
@@ -37,19 +44,19 @@ always @(posedge clk or negedge rst_n) begin
             // 根据period确定新的分频系数div_new
             // 根据period的区间判断分频系数
             if (period > 100000 && period <= 200000)
-                div_new = 1000;
+                div_new = FREQ_24K;
             else if (period > 50000 && period <= 100000)
-                div_new = 500;
+                div_new = FREQ_48K;
             else if (period > 25000 && period <= 50000)
-                div_new = 250;
+                div_new = FREQ_96K;
             else if (period > 12500 && period <= 25000)
-                div_new = 125;
+                div_new = FREQ_192K;
             else if (period > 6250 && period <= 12500)
-                div_new = 60;
+                div_new = FREQ_400K;
             else if (period > 3125 && period <= 6250)
-                div_new = 30;
+                div_new = FREQ_800K;
             else if (period > 1562 && period <= 3125)
-                div_new = 15;
+                div_new = FREQ_1600K;
             else 
                 div_new = div;  // 不在任何区间则保持当前值
 
