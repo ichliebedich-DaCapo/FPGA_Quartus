@@ -53,7 +53,7 @@ set_global_assignment -name EDA_OUTPUT_DATA_FORMAT "SYSTEMVERILOG HDL" -section_
 set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
 set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
 set_global_assignment -name EDA_TEST_BENCH_ENABLE_STATUS TEST_BENCH_MODE -section_id eda_simulation
-set_global_assignment -name EDA_NATIVELINK_SIMULATION_TEST_BENCH tb_sdma -section_id eda_simulation
+set_global_assignment -name EDA_NATIVELINK_SIMULATION_TEST_BENCH tb_freq_detector_square -section_id eda_simulation
 set_global_assignment -name EDA_TEST_BENCH_NAME test_reg_tb -section_id eda_simulation
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id test_reg_tb
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME test_reg_tb -section_id test_reg_tb
@@ -123,22 +123,9 @@ set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_dual_buffer -section_i
 set_global_assignment -name EDA_TEST_BENCH_NAME tb_fsmc_interface -section_id eda_simulation
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id tb_fsmc_interface
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_fsmc_interface -section_id tb_fsmc_interface
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/test_reg_tb.sv -section_id test_reg_tb
-set_global_assignment -name EDA_TEST_BENCH_FILE program/test/tb_test.sv -section_id tb_test
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/interface/tb_auto_gain_control.sv -section_id tb_auto_gain_control
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_DC_Removal.sv -section_id tb_DC_Removal
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_AutoCorr.sv -section_id tb_AutoCorr
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_fixed_to_float.sv -section_id tb_fixed_to_float
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_float_to_fixed.sv -section_id tb_float_to_fixed
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_freq_detector.sv -section_id tb_freq_detector
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_divider.sv -section_id tb_divider
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/interface/tb_freq_detector_square.sv -section_id tb_freq_detector_square
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/submodule/tb_dual_buffer.sv -section_id tb_dual_buffer
-set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/interface/tb_fsmc_interface.sv -section_id tb_fsmc_interface
 set_global_assignment -name EDA_TEST_BENCH_NAME tb_sdma -section_id eda_simulation
 set_global_assignment -name EDA_DESIGN_INSTANCE_NAME NA -section_id tb_sdma
 set_global_assignment -name EDA_TEST_BENCH_MODULE_NAME tb_sdma -section_id tb_sdma
-set_global_assignment -name EDA_TEST_BENCH_FILE program/SDMA/tb_sdma.sv -section_id tb_sdma
 set_global_assignment -name QIP_FILE IP/PLL_c0_200_c1_48/pll_c0_200_c1_48.qip
 set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/freq_detector_square.sv
 set_global_assignment -name SYSTEMVERILOG_FILE module/RTL/interface/freq_control.sv
@@ -171,4 +158,17 @@ set_location_assignment PIN_64 -to rst_n
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/test_reg_tb.sv -section_id test_reg_tb
+set_global_assignment -name EDA_TEST_BENCH_FILE program/test/tb_test.sv -section_id tb_test
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/interface/tb_auto_gain_control.sv -section_id tb_auto_gain_control
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_DC_Removal.sv -section_id tb_DC_Removal
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_AutoCorr.sv -section_id tb_AutoCorr
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_fixed_to_float.sv -section_id tb_fixed_to_float
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_float_to_fixed.sv -section_id tb_float_to_fixed
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_freq_detector.sv -section_id tb_freq_detector
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/internal/tb_divider.sv -section_id tb_divider
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/interface/tb_freq_detector_square.sv -section_id tb_freq_detector_square
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/submodule/tb_dual_buffer.sv -section_id tb_dual_buffer
+set_global_assignment -name EDA_TEST_BENCH_FILE module/TB/interface/tb_fsmc_interface.sv -section_id tb_fsmc_interface
+set_global_assignment -name EDA_TEST_BENCH_FILE program/SDMA/tb_sdma.sv -section_id tb_sdma
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

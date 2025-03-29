@@ -9,6 +9,7 @@ logic clk;
 logic finsh;
 integer count;
 initial begin
+    $timeformat(-9, 0, "", 6);
     clk = 0; // @200MHz
     finsh = 0;
     count =0;
@@ -43,7 +44,7 @@ reg signal_in;
 reg [17:0] period;
 
 // 实例化被测模块
-freq_detector_square dut (
+freq_detector_square uut (
     .clk(clk),
     .rst_n(rst_n),
     .stable(stable),
@@ -63,7 +64,11 @@ initial begin
 
 
     // 开始测试
-    test_1();
+    generate_signal(20,100);
+
+    generate_signal(60,80);
+
+    generate_signal(520,60);
 
     #10;
 
@@ -72,37 +77,21 @@ initial begin
     finsh = 1'b1;
 end
 
-  
-// 测试 1
-task test_1;
-begin
-    // 1024
-    $display("---------Period:40------");
-    generate_signal(20,20);
-
-    $display("---------Period:120------");
-    generate_signal(60,20);
-
-    $display("---------Period:1040------");
-    generate_signal(520,40);
-        
-
-end
-endtask
 
 task generate_signal(input int half_period, input int cycles);
     begin
+        $display("time:%t---------------Period:%d------------------",$time,half_period*2);
         repeat(cycles) begin
             signal_in = 0;
             repeat(half_period)begin
-                @(negedge clk);
+                @(posedge clk);
             end
             signal_in = 1;
             repeat(half_period)begin
-                @(negedge clk);
+                @(posedge clk);
             end
-            signal_in = 0;
         end
+        $display("time:%t --------done------",$time);
     end
 endtask
 
@@ -110,7 +99,7 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time: %t period:%d  stable:%d",$time,period,stable);
+    $monitor("time:%t period:%d stable:%d valid:%d cnt:%d",$time,period,stable,uut.valid,uut.stable_cnt);
 end
 
 // 检测en上升沿并捕获数据
