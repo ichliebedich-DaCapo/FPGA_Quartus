@@ -3,7 +3,7 @@
 //          读时序：rd_en发出一个小脉冲，此时可以在rd_en上升沿处读取数据
 //          写时序：在wr_en为高电平时持续输入数据。
 // 【note】：目前wr_en是短脉冲
-// 【Fmax】：360MHz
+// 【Fmax】：369MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
     parameter DATA_WIDTH = 16,              // 数据位宽
@@ -80,11 +80,11 @@ wire noe_falling  = prev_noe  & ~synced_noe;
 // 地址锁存与状态控制
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        cs <= '0;
-        cs_reg <= '0;
+        cs <= 0;
+        cs_reg <= 0;
         rd_en <= 1'b0;
         addr_en <= 1'b0;
-        rd_data = '0;
+        rd_data = 0;
     end else begin
         // 地址捕获
         if (nadv_rising) begin
@@ -100,11 +100,11 @@ always @(posedge clk or negedge rst_n) begin
             rd_en <= 1'b1;
         end else if (rd_en) begin
             // 读操作清除片选
-            cs <= '0;
+            cs <= 0;
             rd_en <= 1'b0;
         end else if (write_finish)begin
             // 写操作清除片选
-            cs <= '0;
+            cs <= 0;
         end else begin
             addr_en <= 1'b0;
         end
@@ -121,26 +121,26 @@ end
 logic noe_triggered;
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-        output_enable <= '0;
-        hold_counter <= '0;
-        noe_triggered  <= '0;  // 新增触发标志
-        wr_en <='0;
+        output_enable <= 0;
+        hold_counter <= 0;
+        noe_triggered  <= 0;  // 新增触发标志
+        wr_en <=0;
     end else if (wr_state) begin  // 读操作
         if (noe_rising) begin
-            noe_triggered <= '1;         // 标记已触发
-            hold_counter <= '0;
+            noe_triggered <= 1'b1;         // 标记已触发
+            hold_counter <= 0;
         end else if (noe_triggered) begin
-            hold_counter <= hold_counter + '1;  // 默认递增
+            hold_counter <= hold_counter + 1'b1;  // 默认递增
             if (write_finish) begin
                 output_enable <= 1'b0;
                 wr_en         <= 1'b0;
                 noe_triggered <= 1'b0;
-                hold_counter  <= '0;  // 复位计数器
+                hold_counter  <= 0;  // 复位计数器
             end
         end else if(noe_falling) begin
             // 确保初始使能
             output_enable <= 1'b1;
-            wr_en <= '1;// 模块写操作使能
+            wr_en <= 1'b1;// 模块写操作使能
         end
     end
 end

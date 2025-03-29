@@ -1,3 +1,5 @@
+// 【想法】：应接受来自频率检测的稳定信号，毕竟信号频率稳定后才方便检测幅值。稳定后，采样频率是输入信号的12到24倍，也就是说采样12到24个点即为1个周期
+// 但应该也不必接收频率的稳定信号吧，毕竟频率变化不影响采样结果。毕竟频率检测不依靠采样的数据来判断，而是由电压比较器来判断
 module auto_gain_control (
     input clk,// 看门狗系统所需时钟
     input adc_clk,
@@ -47,7 +49,7 @@ reg [3:0] wait_counter;
 
 // 峰值
 reg [11:0] peak;
-reg [12:0] peak_sum; // 12bit*8=15bit
+
 
 // 状态机定义
 enum logic [2:0] {
@@ -116,7 +118,7 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                 // 检查过压条件
                 if (adc_data >= OVER_VOLTAGE_THRESHOLD) begin
                     // 调低增益
-                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - '1 : current_gain_idx;
+                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1'b1 : current_gain_idx;
                     state <= ADJUST;
                     stable <= 0;    // 不稳定
                 end else begin
@@ -130,7 +132,7 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                     if (sample_count == SAMPLE_WINDOW_SIZE-1)
                         state <= EVALUATE;
                     else 
-                        sample_count <= sample_count + '1;
+                        sample_count <= sample_count + 1'b1;
                 end
             end
             // 评估结果
@@ -138,11 +140,11 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                 // 比较峰值
                 if (peak > GAIN_LIMITS[current_gain_idx].upper) begin
                     // 调低增益
-                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - '1 : current_gain_idx;
+                    next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1'b1 : current_gain_idx;
                     state <= ADJUST;
                 end else if (peak < GAIN_LIMITS[current_gain_idx].lower) begin
                     // 调高增益
-                    next_gain_idx <= (current_gain_idx < GAIN_29_25) ? current_gain_idx + '1 : current_gain_idx;
+                    next_gain_idx <= (current_gain_idx < GAIN_29_25) ? current_gain_idx + 1'b1 : current_gain_idx;
                     state <= ADJUST;
                 end else begin
                     // 无需调整，重新采样
@@ -166,9 +168,9 @@ always @(posedge adc_clk or negedge global_reset_n) begin
             WAIT_STABLE: begin
                 if (wait_counter >=WAIT_STABLE_DELAY) begin
                     state <= RESET;
-                    stable <= '1;// 标记为稳定，等下轮评估结果再决定稳不稳定                
+                    stable <= 1'b1;// 标记为稳定，等下轮评估结果再决定稳不稳定                
                 end else begin
-                    wait_counter <= wait_counter + '1;
+                    wait_counter <= wait_counter + 1'b1;
                 end
             end
 
