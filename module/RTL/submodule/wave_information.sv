@@ -32,7 +32,6 @@ localparam DIV_ADDR = 0;// 分频
 localparam GAIN_CTRL_ADDR = 1;// 增益控制
 localparam PERIOD_ADDR_LOW = 2;// 周期计数器_低位
 localparam PERIOD_ADDR_HIGH = 3;// 周期计数器_高位
-localparam FREQ_ADDR =4;// 频率
 
 // 其实根据时序，不需要addr这个寄存器存储，因为单片机读时序的情况下，不会改变rd_data里的数据
 reg [DATA_WIDTH-1:0]addr;
@@ -48,13 +47,6 @@ wire [DATA_WIDTH-1:0]period_high;
 assign period_low = period[DATA_WIDTH-1:0];
 assign period_high = {{(2*DATA_WIDTH-COUNTER_WIDTH){1'b0}},period[COUNTER_WIDTH-1:DATA_WIDTH]};
 
-
-// 插入流水线
-reg [DATA_WIDTH-1:0] freq_reg;
-always_ff@(posedge clk) begin
-    freq_reg <= CLK_MAX/period;
-end
-
 always_ff@(posedge clk) begin
     // 写入数据
     if(wr_en)begin
@@ -63,7 +55,6 @@ always_ff@(posedge clk) begin
             GAIN_CTRL_ADDR:wr_data <= {14'b0,gain_ctrl};
             PERIOD_ADDR_LOW:wr_data <= period_low;
             PERIOD_ADDR_HIGH:wr_data <=period_high;
-            FREQ_ADDR:wr_data <= freq_reg;
             default: wr_data <= 16'hFFFF;
         endcase
     end
