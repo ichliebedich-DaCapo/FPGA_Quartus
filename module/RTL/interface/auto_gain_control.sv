@@ -5,15 +5,15 @@ module auto_gain_control (
     input adc_clk,
     input rst_n,
     input [11:0] adc_data,
-    output reg [1:0] relay_ctrl,
+    output reg [1:0] gain_ctrl,
     output reg stable
 );
 
 // 增益参数定义
-localparam GAIN_3     = 2'd0; // relay_ctrl=2'b00
-localparam GAIN_6_5   = 2'd1; // relay_ctrl=2'b01
-localparam GAIN_13_5  = 2'd2; // relay_ctrl=2'b10
-localparam GAIN_29_25 = 2'd3; // relay_ctrl=2'b11
+localparam GAIN_3     = 2'd0; // gain_ctrl=2'b00
+localparam GAIN_6_5   = 2'd1; // gain_ctrl=2'b01
+localparam GAIN_13_5  = 2'd2; // gain_ctrl=2'b10
+localparam GAIN_29_25 = 2'd3; // gain_ctrl=2'b11
 // 增益映射表（增益与实际继电器开关对应）
 localparam logic [1:0] GAIN_MAP[4] = '{2'b00,2'b01,2'b10,2'b11};
 // 过压阈值（1925mV对应的ADC值）
@@ -36,8 +36,6 @@ localparam gain_limit_t GAIN_LIMITS[4] = '{
     // [30mV,64.814815] → 29.25x → [877.5mV,1895.83mV]
     GAIN_29_25: '{lower: 12'd1798, upper: 12'd3883} // 对应于29.25x增益
 };
-
-
 
 
 // 检测窗口大小（例如1000个采样点）
@@ -100,7 +98,7 @@ always @(posedge adc_clk or negedge global_reset_n) begin
     if(!global_reset_n)begin
         state <= RESET;// 初始状态
         current_gain_idx <= GAIN_3;// 初始最低增益
-        relay_ctrl <= GAIN_MAP[GAIN_3];
+        gain_ctrl <= GAIN_MAP[GAIN_3];
         stable <= 0;
         peak <= 0;
         wait_counter <= 0;
@@ -160,8 +158,8 @@ always @(posedge adc_clk or negedge global_reset_n) begin
                 // 更新增益
                 current_gain_idx <= next_gain_idx;
                 // 设置继电器控制信号
-                relay_ctrl <= GAIN_MAP[next_gain_idx];
-                stable <= '0;// 不稳定
+                gain_ctrl <= GAIN_MAP[next_gain_idx];
+                stable <= 0;// 不稳定
                 state <= WAIT_STABLE;
             end
 

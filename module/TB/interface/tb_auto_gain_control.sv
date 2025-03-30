@@ -10,6 +10,7 @@ logic adc_clk;
 logic finsh;
 integer count;
 initial begin
+    $timeformat(-9, 0, "", 6);
     clk = 0; // @200MHz
     adc_clk = 0;// @10MHz
     finsh = 0;
@@ -36,15 +37,18 @@ function logic [11:0] mv2adc(real mv);
 endfunction
 
 logic [11:0] adc_data;
+real input_mv_reg;
 task apply_signal(real input_mv, int cycles);
-    repeat(cycles) @(negedge adc_clk)
-        adc_data = mv2adc(input_mv * dut.GAIN_MAP[dut.current_gain_idx]);
+    input_mv_reg = input_mv;
+    $display("time:%t adc:%d",$time,input_mv);
+    repeat(cycles) @(posedge adc_clk)
+        adc_data = mv2adc(input_mv);
 endtask
 // =========================================时钟周期定义======================================
 
 // 信号定义
 logic rst_n;
-logic [1:0] relay_ctrl;
+logic [1:0] gain_ctrl;
 logic stable;
 
 
@@ -55,7 +59,7 @@ auto_gain_control dut (
     .adc_clk(adc_clk),
     .rst_n(rst_n),
     .adc_data(adc_data),
-    .relay_ctrl(relay_ctrl),
+    .gain_ctrl(gain_ctrl),
     .stable(stable)
 );
 
@@ -64,7 +68,6 @@ auto_gain_control dut (
 initial begin
     rst_n = 1'b1;
     // 初始化所有输入信号
-    apply_signal(1100,2);// 应立即降低档位
 
     // 释放复位
     rst_n = 1'b0;#5;
@@ -72,11 +75,8 @@ initial begin
 
 
     // 开始测试
-    $display("\n=== start:%d ===\n",$time);
     test_1();
-    #10;
     test_2();
-    #10;
 
 
     // 结束仿真 
@@ -88,25 +88,13 @@ end
 task test_1;
 begin
 // 初始增益
-$display("gain：%0d jd：%b", dut.current_gain_idx, relay_ctrl);
-apply_signal(1900,2);// 应立即降低档位
-$display("gain：%0d jd：%b", dut.current_gain_idx, relay_ctrl);
-
+apply_signal(500,1048);// 应立即降低档位
 // 测试稳定所需时间
-$display("\nTest time of stable");
-apply_signal(800, 512); 
-$display("time start:%d", $time);
-wait(stable);
-$display("time end:%d", $time);
-#50;
-
+apply_signal(600, 600); 
 // 测试调低增益
-apply_signal(1900,2);// 应立即降低档位进入IDLE状态
-apply_signal(800, 512); // 800mV输入
-wait(stable);
-$display("gain：%0d jd：%b", dut.current_gain_idx, relay_ctrl);
-apply_signal(1100, 512);
-
+apply_signal(650,600);// 应立即降低档位进入IDLE状态
+apply_signal(800, 600); // 800mV输入
+apply_signal(1100, 600);
 end
 endtask
 
@@ -121,7 +109,7 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time: %t gain:%d",$time,relay_ctrl);
+    $monitor("time: %t adc:%d peak:%d gain:%d count:%d stable:%d",$time,input_mv_reg,dut.peak,gain_ctrl,dut.sample_count,dut.stable);
 end
 
 endmodule
