@@ -1,250 +1,130 @@
-// 【修正说明】
-// 1. 修复peak和valley多驱动问题，统一在峰值检测模块处理
-// 2. 优化状态机转换逻辑
-// 3. 修复增益边界判断逻辑
-// 4. 补充必要寄存器初始化
-
-// 【简介】自动增益程控模块（时序优化修正版）
 module auto_gain_control (
-    input         adc_clk,     // ADC采样时钟
-    input         rst_n,       // 异步复位，低有效
-    input  [11:0] adc_data,    // ADC采样数据
-    output reg [1:0] gain_ctrl,// 增益控制信号
-    output reg    stable       // 稳定状态指示
+    input        adc_clk,     // ADC采样时钟（200MHz+）
+    input        rst_n,       // 异步复位
+    input [11:0] adc_data,    // ADC数据（0-2000mV）
+    output reg [1:0] gain_ctrl, // 增益控制[一级,二级]
+    output reg      stable     // 稳定指示
 );
 
-// 增益参数定义
-localparam GAIN_3     = 2'd0; // gain_ctrl=2'b00
-localparam GAIN_6_5   = 2'd1; // gain_ctrl=2'b01
-localparam GAIN_13_5  = 2'd2; // gain_ctrl=2'b10
-localparam GAIN_29_25 = 2'd3; // gain_ctrl=2'd11
+// ================== 参数定义 ====================
+parameter STABLE_CYCLES = 5;  // 需连续5个稳定周期
+parameter SAMPLE_NUM    = 512; // 采样点数
+parameter OVERLOAD_ADC  = 3944;// 1925mV对应ADC值
 
-// 增益映射表（增益与实际继电器开关对应）
-localparam logic [1:0] GAIN_MAP[4] = '{2'b00,2'b01,2'b10,2'b11};
-
-// 过压阈值（1925mV对应的ADC值）
-localparam OVER_VOLTAGE_THRESHOLD = 12'd3941;
-
-// 增益上下限结构体
+// 增益档位阈值（单位：ADC码值）
 typedef struct {
-    logic [11:0] lower; // 对应区间的下限ADC值（峰峰值）
-    logic [11:0] upper; // 对应区间的上限ADC值（峰峰值）
-} gain_limit_t;
+    logic [11:0] lower;
+    logic [11:0] upper;
+} threshold_t;
 
-// 增益上下限查找表（修改为峰峰值范围）
-localparam gain_limit_t GAIN_LIMITS[4] = '{
-    // [291.666667,600mV] →3x →[875mV,1800mV]（峰峰值范围）
-    '{lower: 12'd1791, upper: 12'd3685},  // GAIN_3
+threshold_t THRESHOLDS[4] = '{
+    // [291.666667,600mV] →3x →[875mV,1800mV]
+    '{lower:1792, upper:3686}, // 档位00
     // [134.615385,291.666667] →6.5x →[875mV,1895.83mV]
-    '{lower: 12'd1791, upper: 12'd3883}, // GAIN_6_5
+    '{lower:1792, upper:3884}, // 档位01
     // [64.814815,134.615385] →13.5x →[875mV,1817.307mV]
-    '{lower: 12'd1791, upper: 12'd3723}, // GAIN_13_5
+    '{lower:1792, upper:3723}, // 档位10
     // [30mV,64.814815] → 29.25x → [877.5mV,1895.83mV]
-    '{lower: 12'd1798, upper: 12'd3883}  // GAIN_29_25
+    '{lower:1798, upper:3884}  // 档位11
 };
+    
+// ================== 状态定义 ====================
+typedef enum logic [1:0] {
+    IDLE,
+    SAMPLING,
+    CALCULATE,
+    ADJUST
+} state_t;
 
-// 检测窗口大小（512个采样点）
-localparam SAMPLE_WINDOW_SIZE = 512;
-localparam STABLE_COUNTER_THRESHOLD = 3;
-localparam WAIT_STABLE_CYCLES = 10;
-reg [1:0] stable_counter;
+// ================== 寄存器声明 ====================
+state_t         current_state, next_state;
+reg [9:0]       sample_counter;
+reg [11:0]      max_value, min_value;
+reg [11:0]      peak_value;
+reg [1:0]       target_gain;
+reg [3:0]       stable_counter;
+reg             overload_flag;
 
-// 时序优化新增参数
-localparam PIPELINE_STAGES = 2; // 关键路径流水线级数
-
-// 峰峰值检测相关寄存器
-reg [11:0] peak, peak_d1;      // 窗口内最大值（带流水线）
-reg [11:0] valley, valley_d1;  // 窗口内最小值（带流水线）
-reg [11:0] pp_value;           // 峰峰值计算结果
-reg [11:0] pp_value_pre;       // 峰峰值预计算值
-
-// 状态机定义（三段式优化）
-enum logic [5:0] {
-    RESET      = 6'b000001,// 复位初始化
-    SAMPLING   = 6'b000010,// 数据采样
-    OVERLOAD   = 6'b000100,// ADC过载
-    EVALUATE   = 6'b001000,// 信号评估
-    ADJUST     = 6'b010000,// 增益调整
-    WAIT_STABLE= 6'b100000 // 稳定等待
-} state, next_state;
-
-// 增益控制寄存器组（降低扇出）
-reg [1:0] current_gain_idx;
-reg [1:0] next_gain_idx;
-reg [1:0] current_gain_idx_rep1; // 寄存器副本1
-reg [1:0] current_gain_idx_rep2; // 寄存器副本2
-
-// 同步控制寄存器
-reg [9:0]  sample_count;       // 采样计数器
-reg        sample_done;        // 采样完成标志
-reg        is_adc_overload;    // ADC过载标志
-reg        is_pp_value_big;    // 峰峰值过大标志
-reg        is_pp_value_small;  // 峰峰值过小标志
-reg [3:0]  wait_counter;       // 稳定等待计数器
-
-// 输入数据流水线（两级寄存）
-reg [11:0] adc_data_reg[0:1];
-always @(posedge adc_clk) begin
-    adc_data_reg[0] <= adc_data;     // 第一级寄存
-    adc_data_reg[1] <= adc_data_reg[0]; // 第二级寄存
-end
-
-// 峰值检测流水线（统一处理多驱动问题）
-always @(posedge adc_clk or negedge rst_n) begin
-    if (!rst_n) begin
-        peak   <= 12'd0;
-        valley <= 12'hFFF;
-        peak_d1  <= 12'd0;
-        valley_d1 <= 12'hFFF;
-    end else begin
-        peak_d1  <= peak;
-        valley_d1 <= valley;
-        
-        case(state)
-            RESET: begin  // 复位时初始化
-                peak   <= 12'd0;
-                valley <= 12'hFFF;
-            end
-            SAMPLING: begin
-                // 更新峰值
-                if (adc_data_reg[1] > peak_d1) 
-                    peak <= adc_data_reg[1];
-                // 更新谷值
-                if (adc_data_reg[1] < valley_d1)
-                    valley <= adc_data_reg[1];
-            end
-            EVALUATE: begin // 评估结束后重置
-                peak   <= 12'd0;
-                valley <= 12'hFFF;
-            end
-        endcase
-    end
-end
-
-// 峰峰值计算流水线
-always @(posedge adc_clk) begin
-    pp_value_pre <= peak_d1 - valley_d1; // 预计算级
-    pp_value     <= pp_value_pre;       // 输出级
-end
-
-// 状态机时序逻辑
-always @(posedge adc_clk or negedge rst_n) begin
-    if (!rst_n)begin
-        state <= RESET;
-        current_gain_idx_rep1 <= GAIN_3;
-        current_gain_idx_rep2 <= GAIN_3;
-    end
-    else begin
-        state <= next_state;
-        // 寄存器副本同步
-        current_gain_idx_rep1 <= current_gain_idx;
-        current_gain_idx_rep2 <= current_gain_idx;
-    end
-end
-
-// 状态机组合逻辑
-always_comb  begin
-    next_state = state;
-    case(state)
-    // 重置
-        RESET: next_state = SAMPLING;
-        
+// ================== 组合逻辑 =====================
+// 下一状态计算
+always_comb begin
+    next_state = current_state;
+    case(current_state)
+        IDLE:     next_state = SAMPLING;
         SAMPLING: begin
-            if (is_adc_overload)       next_state = OVERLOAD;// ADC过载直接跳转
-            else if (sample_done)      next_state = EVALUATE;// 采样完成跳转
-            else next_state = SAMPLING;
-        end
-        OVERLOAD:begin 
-            next_state = ADJUST;
-        end
-        
-        EVALUATE: begin
-            if (is_pp_value_big || is_pp_value_small) 
-                next_state = ADJUST;
-            else 
+            if(sample_counter == SAMPLE_NUM-1) 
+                next_state = CALCULATE;
+            else
                 next_state = SAMPLING;
         end
-        
-        ADJUST:    next_state = WAIT_STABLE;
-        
-        WAIT_STABLE: begin
-            if (wait_counter >= WAIT_STABLE_CYCLES) 
-                next_state = RESET;
-            else
-                next_state = WAIT_STABLE;
-        end
-        default: next_state = RESET;
+        CALCULATE: next_state = ADJUST;
+        ADJUST:   next_state = IDLE;
+        default:  next_state = IDLE;
     endcase
 end
 
-// 同步控制信号生成
-always @(posedge adc_clk or negedge rst_n) begin
-    if (!rst_n) begin
-        current_gain_idx <= GAIN_3;
-        gain_ctrl        <= GAIN_MAP[GAIN_3];
-        stable_counter   <= '0;
-        sample_count     <= 10'd0;
-        wait_counter     <= 4'd0;
+// ================== 时序逻辑 =====================
+always_ff @(posedge adc_clk or negedge rst_n) begin
+    if(!rst_n) begin
+        current_state   <= IDLE;
+        sample_counter  <= 0;
+        max_value       <= 0;
+        min_value       <= 4095;
+        peak_value      <= 0;
+        gain_ctrl       <= 2'b00;
+        target_gain     <= 2'b00;
+        stable_counter  <= 0;
+        overload_flag   <= 0;
     end else begin
-        case(state)
-            RESET: begin
-                stable_counter<= '0;
-                sample_count <= 10'd0;
+        current_state <= next_state;
+        overload_flag <= (adc_data > OVERLOAD_ADC);
+
+        case(current_state)
+            IDLE: begin
+                sample_counter <= 0;
+                max_value      <= adc_data;
+                min_value      <= adc_data;
             end
-            
+
             SAMPLING: begin
-                sample_count <= sample_count + 1'b1;
+                sample_counter <= sample_counter + 1;
+                max_value      <= (adc_data > max_value) ? adc_data : max_value;
+                min_value      <= (adc_data < min_value) ? adc_data : min_value;
             end
-            
-            EVALUATE: begin
-                sample_count <= 10'd0; // 重置采样计数器
-                // 稳定计数器逻辑
-                if (!(is_pp_value_big || is_pp_value_small)) begin
-                    if (stable_counter < STABLE_COUNTER_THRESHOLD) 
-                        stable_counter <= stable_counter + 1'b1;
-                end else begin
-                    stable_counter <= '0;
-                end
+
+            CALCULATE: begin
+                peak_value <= max_value - min_value;
             end
-            
+
             ADJUST: begin
-                current_gain_idx <= next_gain_idx;
-                gain_ctrl        <= GAIN_MAP[next_gain_idx];
-                wait_counter     <= 4'd0;
-                stable_counter           <= '0;
-            end
-            
-            WAIT_STABLE: begin
-                wait_counter <= wait_counter + 1'b1;
+                // 过载紧急处理
+                if(overload_flag) begin
+                    target_gain <= (gain_ctrl > 0) ? (gain_ctrl - 1) : gain_ctrl;
+                    stable_counter <= 0;
+                end
+                // 常规调整
+                else begin
+                    if(peak_value > THRESHOLDS[gain_ctrl].upper) begin
+                        target_gain <= (gain_ctrl > 0) ? (gain_ctrl - 1) : gain_ctrl;
+                        stable_counter <= 0;
+                    end
+                    else if(peak_value < THRESHOLDS[gain_ctrl].lower) begin
+                        target_gain <= (gain_ctrl < 3) ? (gain_ctrl + 1) : gain_ctrl;
+                        stable_counter <= 0;
+                    end
+                    else begin
+                        target_gain <= gain_ctrl;
+                        stable_counter <= (stable_counter < STABLE_CYCLES) ? stable_counter + 1 : stable_counter;
+                    end
+                end
+
+                // 更新输出寄存器
+                gain_ctrl <= target_gain;
             end
         endcase
     end
 end
-assign stable = (stable_counter == STABLE_COUNTER_THRESHOLD);
 
-// 组合逻辑时序化
-always @(posedge adc_clk) begin
-    sample_done     <= (sample_count == SAMPLE_WINDOW_SIZE-1);
-    is_adc_overload <= (adc_data_reg[1] >= OVER_VOLTAGE_THRESHOLD);
-    // 使用副本降低扇出
-    is_pp_value_big   <= (pp_value > GAIN_LIMITS[current_gain_idx_rep1].upper);
-    is_pp_value_small <= (pp_value < GAIN_LIMITS[current_gain_idx_rep2].lower);
-end
-
-// 增益调整逻辑（提前计算）
-always @(posedge adc_clk) begin
-    case(state)
-        EVALUATE:begin
-            case({is_pp_value_big, is_pp_value_small})
-                2'b01: next_gain_idx <= (current_gain_idx < GAIN_29_25) ? current_gain_idx + 1'b1 : GAIN_29_25;
-                2'b10: next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1'b1 : GAIN_3;
-                default: next_gain_idx <= current_gain_idx;
-            endcase
-        end
-        OVERLOAD:begin 
-            next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1'b1 : GAIN_3;
-        end
-    endcase
-end
+assign stable = (stable_counter == STABLE_CYCLES);
 
 endmodule

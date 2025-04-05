@@ -38,22 +38,13 @@ endfunction
 
 logic [11:0] adc_data;
 real input_mv_reg;
-// 输入峰峰值
 task apply_signal(real input_mv, int cycles);
     input_mv_reg = input_mv;
-    $display("time:%t -------------------adc:%d-----------------",$time,input_mv);
+    $display("time:%t adc:%d",$time,input_mv);
     for(int i =0;i<cycles;i++)begin
-         @(posedge adc_clk)adc_data = mv2adc(input_mv/2.0*($sin(2*3.14*i/512)+1));
+         @(posedge adc_clk)adc_data = mv2adc(input_mv*($sin(2*3.14*i/cycles)+1));
     end
-endtask
-// 等待档位
-task wait_gain(real input_mv,reg [1:0]target_gain);
-    input_mv_reg = input_mv;
-    $display("time:%t ----------------adc:%d gain:%d---------------",$time,input_mv,target_gain);
-    for(int i =0;i<16'hFFFF;i++)begin
-         @(posedge adc_clk)adc_data = mv2adc(input_mv/2.0*($sin(2*3.14*i/512)+1));
-         if(dut.gain_ctrl==target_gain) break;
-    end
+    repeat(cycles)
 endtask
 // =========================================时钟周期定义======================================
 
@@ -97,23 +88,14 @@ end
 // 测试 1
 task test_1;
 begin
-
-// 应正常 00
-apply_signal(1800,512*6);
-// 增益应调高 01
-wait_gain(600,1);
-// 增益应调高 10
-wait_gain(600,2);
-// 应平稳 10
-apply_signal(1600, 512*6); // 800mV输入
-// 应提高 11
-apply_signal(600, 512*2);
-// 应降低 10
-apply_signal(1900, 512*2);
-// 应立即降低
-apply_signal(1980, 50);
-// 应稳定
-apply_signal(1200, 512*6);
+// 初始增益
+apply_signal(500,1048);// 应立即降低档位
+// 测试稳定所需时间
+apply_signal(600, 600); 
+// 测试调低增益
+apply_signal(650,600);// 应立即降低档位进入IDLE状态
+apply_signal(800, 600); // 800mV输入
+apply_signal(1100, 600);
 end
 endtask
 
@@ -128,7 +110,7 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time: %t peak:%d gain:%d  stable_cnt:%d stable:%d",$time,dut.peak_value,gain_ctrl,dut.stable_counter,dut.stable);
+    $monitor("time: %t adc:%d peak:%d gain:%d count:%d stable_cnt:%d stable:%d",$time,input_mv_reg,dut.max_reg-dut.min_reg,gain_ctrl,dut.sample_cnt,dut.stable_counter,dut.stable);
 end
 
 endmodule
