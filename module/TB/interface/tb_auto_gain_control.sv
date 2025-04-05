@@ -55,7 +55,6 @@ logic stable;
 
 // **************用于测试*****************
 auto_gain_control dut (
-    .clk(clk),
     .adc_clk(adc_clk),
     .rst_n(rst_n),
     .adc_data(adc_data),
@@ -109,7 +108,7 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time: %t adc:%d peak:%d gain:%d count:%d stable:%d",$time,input_mv_reg,dut.peak,gain_ctrl,dut.sample_count,dut.stable);
+    $monitor("time: %t adc:%d peak:%d gain:%d count:%d stable_cnt:%d stable:%d",$time,input_mv_reg,dut.peak,gain_ctrl,dut.sample_count,dut.stable_counter,dut.stable);
 end
 
 endmodule

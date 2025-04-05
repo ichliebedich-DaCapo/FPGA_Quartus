@@ -47,6 +47,7 @@ localparam gain_limit_t GAIN_LIMITS[4] = '{
 localparam SAMPLE_WINDOW_SIZE = 512;
 localparam STABLE_COUNTER_THRESHOLD = 3;
 localparam WAIT_STABLE_CYCLES = 10;
+reg [1:0] stable_counter;
 
 // 时序优化新增参数
 localparam PIPELINE_STAGES = 2; // 关键路径流水线级数
@@ -58,16 +59,18 @@ reg [11:0] pp_value;           // 峰峰值计算结果
 reg [11:0] pp_value_pre;       // 峰峰值预计算值
 
 // 状态机定义（三段式优化）
-enum logic [2:0] {
-    RESET,        // 复位初始化
-    SAMPLING,     // 数据采样
-    EVALUATE,     // 信号评估
-    ADJUST,       // 增益调整
-    WAIT_STABLE   // 稳定等待
+enum logic [5:0] {
+    RESET      = 6'b000001,// 复位初始化
+    SAMPLING   = 6'b000010,// 数据采样
+    OVERLOAD   = 6'b000100,// ADC过载
+    EVALUATE   = 6'b001000,// 信号评估
+    ADJUST     = 6'b010000,// 增益调整
+    WAIT_STABLE= 6'b100000 // 稳定等待
 } state, next_state;
 
 // 增益控制寄存器组（降低扇出）
-(* keep = "true" *) reg [1:0] current_gain_idx;
+reg [1:0] current_gain_idx;
+reg [1:0] next_gain_idx;
 reg [1:0] current_gain_idx_rep1; // 寄存器副本1
 reg [1:0] current_gain_idx_rep2; // 寄存器副本2
 
@@ -114,7 +117,6 @@ always @(posedge adc_clk or negedge rst_n) begin
                 peak   <= 12'd0;
                 valley <= 12'hFFF;
             end
-            default: ; // 其他状态保持当前值
         endcase
     end
 end
@@ -127,20 +129,33 @@ end
 
 // 状态机时序逻辑
 always @(posedge adc_clk or negedge rst_n) begin
-    if (!rst_n) state <= RESET;
-    else state <= next_state;
+    if (!rst_n)begin
+        state <= RESET;
+        current_gain_idx_rep1 <= GAIN_3;
+        current_gain_idx_rep2 <= GAIN_3;
+    end
+    else begin
+        state <= next_state;
+        // 寄存器副本同步
+        current_gain_idx_rep1 <= current_gain_idx;
+        current_gain_idx_rep2 <= current_gain_idx;
+    end
 end
 
 // 状态机组合逻辑
-always @(*) begin
+always_comb  begin
     next_state = state;
     case(state)
+    // 重置
         RESET: next_state = SAMPLING;
         
         SAMPLING: begin
-            if (is_adc_overload)       next_state = ADJUST;
-            else if (sample_done)      next_state = EVALUATE;
+            if (is_adc_overload)       next_state = OVERLOAD;// ADC过载直接跳转
+            else if (sample_done)      next_state = EVALUATE;// 采样完成跳转
             else next_state = SAMPLING;
+        end
+        OVERLOAD:begin 
+            next_state = ADJUST;
         end
         
         EVALUATE: begin
@@ -158,6 +173,7 @@ always @(*) begin
             else
                 next_state = WAIT_STABLE;
         end
+        default: next_state = RESET;
     endcase
 end
 
@@ -166,19 +182,13 @@ always @(posedge adc_clk or negedge rst_n) begin
     if (!rst_n) begin
         current_gain_idx <= GAIN_3;
         gain_ctrl        <= GAIN_MAP[GAIN_3];
-        stable           <= 1'b0;
+        stable_counter   <= '0;
         sample_count     <= 10'd0;
         wait_counter     <= 4'd0;
-        current_gain_idx_rep1 <= GAIN_3;
-        current_gain_idx_rep2 <= GAIN_3;
     end else begin
-        // 寄存器副本同步
-        current_gain_idx_rep1 <= current_gain_idx;
-        current_gain_idx_rep2 <= current_gain_idx;
-        
         case(state)
             RESET: begin
-                stable       <= 1'b0;
+                stable_counter<= '0;
                 sample_count <= 10'd0;
             end
             
@@ -190,10 +200,10 @@ always @(posedge adc_clk or negedge rst_n) begin
                 sample_count <= 10'd0; // 重置采样计数器
                 // 稳定计数器逻辑
                 if (!(is_pp_value_big || is_pp_value_small)) begin
-                    if (stable < STABLE_COUNTER_THRESHOLD) 
-                        stable <= stable + 1'b1;
+                    if (stable_counter < STABLE_COUNTER_THRESHOLD) 
+                        stable_counter <= stable_counter + 1'b1;
                 end else begin
-                    stable <= 1'b0;
+                    stable_counter <= '0;
                 end
             end
             
@@ -201,7 +211,7 @@ always @(posedge adc_clk or negedge rst_n) begin
                 current_gain_idx <= next_gain_idx;
                 gain_ctrl        <= GAIN_MAP[next_gain_idx];
                 wait_counter     <= 4'd0;
-                stable           <= 1'b0;
+                stable_counter           <= '0;
             end
             
             WAIT_STABLE: begin
@@ -210,6 +220,7 @@ always @(posedge adc_clk or negedge rst_n) begin
         endcase
     end
 end
+assign stable = (stable_counter == STABLE_COUNTER_THRESHOLD);
 
 // 组合逻辑时序化
 always @(posedge adc_clk) begin
@@ -221,15 +232,19 @@ always @(posedge adc_clk) begin
 end
 
 // 增益调整逻辑（提前计算）
-reg [1:0] next_gain_idx;
 always @(posedge adc_clk) begin
-    if (state == EVALUATE) begin
-        if (is_pp_value_big) begin
-            next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1'b1 : GAIN_3;
-        end else if (is_pp_value_small) begin
-            next_gain_idx <= (current_gain_idx < GAIN_29_25) ? current_gain_idx + 1'b1 : GAIN_29_25;
+    case(state)
+        EVALUATE:begin
+            case({is_pp_value_big, is_pp_value_small})
+                2'b01: next_gain_idx <= (current_gain_idx < GAIN_29_25) ? current_gain_idx + 1'b1 : GAIN_29_25;
+                2'b10: next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1'b1 : GAIN_3;
+                default: next_gain_idx <= current_gain_idx;
+            endcase
         end
-    end
+        OVERLOAD:begin 
+            next_gain_idx <= (current_gain_idx > GAIN_3) ? current_gain_idx - 1'b1 : GAIN_3;
+        end
+    endcase
 end
 
 endmodule
