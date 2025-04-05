@@ -107,13 +107,15 @@ wait_gain(600,2);
 // 应平稳 10
 apply_signal(1600, 512*6); // 800mV输入
 // 应提高 11
-apply_signal(600, 512*2);
+wait_gain(600,3);
 // 应降低 10
-apply_signal(1900, 512*2);
+wait_gain(1900,2);
 // 应立即降低
-apply_signal(1980, 50);
+apply_signal(1400, 512*6);
+apply_signal(1980, 256);
 // 应稳定
 apply_signal(1200, 512*6);
+apply_signal(1400, 512*6);
 end
 endtask
 
@@ -128,7 +130,7 @@ endtask
 // ==============================监测内部变量===============================
 initial begin
     // $display("Stored Data = %h", uut.test_reg.stored_data); // 层次化路径
-    $monitor("time: %t peak:%d gain:%d  stable_cnt:%d stable:%d",$time,dut.peak_value,gain_ctrl,dut.stable_counter,dut.stable);
+    $monitor("time: %t peak:%d gain:%d stable_cnt:%d stable:%d",$time,dut.peak_value,gain_ctrl,dut.stable_counter,dut.stable);
 end
 
 endmodule

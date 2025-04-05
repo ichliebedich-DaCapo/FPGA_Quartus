@@ -1,3 +1,6 @@
+// 【简介】自动增益程控
+// 【Fmax】：210MHz
+// 【note】：548个周期，进行一次稳定判断。过压保护大概在215个周期响应。
 module auto_gain_control (
     input        adc_clk,     // ADC采样时钟（200MHz+）
     input        rst_n,       // 异步复位
@@ -7,9 +10,10 @@ module auto_gain_control (
 );
 
 // ================== 参数定义 ====================
-parameter STABLE_CYCLES = 5;  // 需连续5个稳定周期
-parameter SAMPLE_NUM    = 512; // 采样点数
-parameter OVERLOAD_ADC  = 3944;// 1925mV对应ADC值
+localparam STABLE_CYCLES = 5;  // 需连续5个稳定周期
+localparam SAMPLE_NUM    = 512; // 采样点数
+localparam OVERLOAD_ADC  = 3944;// 1925mV对应ADC值
+localparam WAIT_CYCLES  = 31;
 
 // 增益档位阈值（单位：ADC码值）
 typedef struct {
@@ -29,11 +33,13 @@ threshold_t THRESHOLDS[4] = '{
 };
     
 // ================== 状态定义 ====================
-typedef enum logic [1:0] {
+typedef enum logic [2:0] {
     IDLE,
     SAMPLING,
     CALCULATE,
-    ADJUST
+    EVALUATE,
+    ADJUST,
+    WAIT_STABLE
 } state_t;
 
 // ================== 寄存器声明 ====================
@@ -43,7 +49,9 @@ reg [11:0]      max_value, min_value;
 reg [11:0]      peak_value;
 reg [1:0]       target_gain;
 reg [3:0]       stable_counter;
+reg [4:0]       wait_counter;
 reg             overload_flag;
+reg             is_evaluate_done;// 是否完成评估
 
 // ================== 组合逻辑 =====================
 // 下一状态计算
@@ -57,8 +65,16 @@ always_comb begin
             else
                 next_state = SAMPLING;
         end
-        CALCULATE: next_state = ADJUST;
-        ADJUST:   next_state = IDLE;
+        CALCULATE: next_state = EVALUATE;
+        EVALUATE:next_state = ADJUST;
+        ADJUST:next_state = WAIT_STABLE;
+        WAIT_STABLE: begin
+            if(wait_counter == WAIT_CYCLES)begin
+                next_state = IDLE;
+            end else begin
+                next_state = WAIT_STABLE;
+            end
+        end
         default:  next_state = IDLE;
     endcase
 end
@@ -94,9 +110,10 @@ always_ff @(posedge adc_clk or negedge rst_n) begin
 
             CALCULATE: begin
                 peak_value <= max_value - min_value;
+                is_evaluate_done <= 0;
             end
 
-            ADJUST: begin
+            EVALUATE:begin
                 // 过载紧急处理
                 if(overload_flag) begin
                     target_gain <= (gain_ctrl > 0) ? (gain_ctrl - 1) : gain_ctrl;
@@ -107,19 +124,32 @@ always_ff @(posedge adc_clk or negedge rst_n) begin
                     if(peak_value > THRESHOLDS[gain_ctrl].upper) begin
                         target_gain <= (gain_ctrl > 0) ? (gain_ctrl - 1) : gain_ctrl;
                         stable_counter <= 0;
+                        is_evaluate_done <= 1;
                     end
                     else if(peak_value < THRESHOLDS[gain_ctrl].lower) begin
                         target_gain <= (gain_ctrl < 3) ? (gain_ctrl + 1) : gain_ctrl;
                         stable_counter <= 0;
+                        is_evaluate_done <= 1;
                     end
                     else begin
                         target_gain <= gain_ctrl;
+                        is_evaluate_done <= 1;
                         stable_counter <= (stable_counter < STABLE_CYCLES) ? stable_counter + 1 : stable_counter;
                     end
                 end
+            end
 
+            ADJUST: begin
                 // 更新输出寄存器
-                gain_ctrl <= target_gain;
+                if(is_evaluate_done)begin
+                    gain_ctrl <= target_gain;
+                    wait_counter <= 0;
+                end
+            end
+
+            WAIT_STABLE:begin
+                if(wait_counter < WAIT_CYCLES)
+                    wait_counter <= wait_counter + 1;
             end
         endcase
     end
