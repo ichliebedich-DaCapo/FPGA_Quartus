@@ -3,11 +3,11 @@
 //          读时序：rd_en发出一个小脉冲，此时可以在rd_en上升沿处读取数据
 //          写时序：在wr_en为高电平时持续输入数据。
 // 【note】：目前wr_en是短脉冲
-// 【Fmax】：369MHz
+// 【Fmax】：349MHz
 module fsmc_interface #(
     parameter ADDR_WIDTH = 18,              // 地址/数据总线位宽
     parameter DATA_WIDTH = 16,              // 数据位宽
-    parameter DATA_HOLD_CYCLES = 2,         // 数据保持周期
+    parameter DATA_HOLD_CYCLES = 16,         // 数据保持周期，25MHz时是2个周期，现在200MHz改成16个周期
     parameter NUM_MODUELS = 2
 )(
     // ================= 物理接口 =================
@@ -69,7 +69,6 @@ always_ff @(posedge clk or negedge rst_n) begin
     end
 end
 
-reg wr_state;// 读写状态
 reg cs_reg;
 // 边沿检测
 wire nadv_rising  = ~prev_nadv & synced_nadv;
@@ -91,7 +90,6 @@ always @(posedge clk or negedge rst_n) begin
             {cs_reg, rd_data}<=AD;
             cs <= 1<<AD[ADDR_WIDTH-1'b1:DATA_WIDTH];
             addr_en <= 1'b1;
-            wr_state <= synced_nwe; 
         end else if(nwe_rising)begin
         // ===================
         // 单片机写数据捕获
@@ -115,35 +113,43 @@ end
 // =============================================================================
 // 读数据控制
 // 时序说明：
-//  -需要在乎地址是否正确
-//  -由于正确情况下读操作的state正好为高电平，其他情况均为低电平，所以这个可以作为控制信号
+//  -需要在乎地址是否正确(但是这个东西移动到assign里了，没有完善)
+//  -真正写入会延迟两个周期
 // =============================================================================
-logic noe_triggered;
-always @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        output_enable <= 0;
-        hold_counter <= 0;
-        noe_triggered  <= 0;  // 新增触发标志
-        wr_en <=0;
-    end else if (wr_state) begin  // 读操作
-        if (noe_rising) begin
-            noe_triggered <= 1'b1;         // 标记已触发
-            hold_counter <= 0;
-        end else if (noe_triggered) begin
+typedef enum logic [1:0] {
+    WR_IDLE,
+    WR_ACTIVE,
+    WR_HOLD
+} wr_state_t;
+wr_state_t wr_state;
+always @(posedge clk) begin
+    case (wr_state)
+        WR_IDLE: begin
+            wr_en <=0;
+            output_enable <= 1'b0;
+            if (noe_falling) begin
+                wr_state <= WR_ACTIVE;
+                hold_counter <= 0;
+            end
+        end
+        WR_ACTIVE: begin
+            output_enable <= 1'b1;
+            wr_en <= 1'b1;
+            if (noe_rising) begin
+                wr_state <= WR_HOLD;  // 进入数据保持状态
+            end
+
+        end
+        WR_HOLD: begin
             hold_counter <= hold_counter + 1'b1;  // 默认递增
             if (write_finish) begin
-                output_enable <= 1'b0;
-                wr_en         <= 1'b0;
-                noe_triggered <= 1'b0;
-                hold_counter  <= 0;  // 复位计数器
+                wr_state <= WR_IDLE;
             end
-        end else if(noe_falling) begin
-            // 确保初始使能
-            output_enable <= 1'b1;
-            wr_en <= 1'b1;// 模块写操作使能
         end
-    end
+        default: wr_state <= WR_IDLE;
+    endcase
 end
+
 
 // 总线驱动
 assign AD = output_enable ? {{(ADDR_WIDTH-DATA_WIDTH){1'bz}}, wr_data_array[cs_reg]} : {ADDR_WIDTH{1'bz}};

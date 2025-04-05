@@ -65,12 +65,12 @@ end
     .NWE(nwe),
     .AD(ad),
     .rd_data(module_in),
-    .wr_data({module_out2,module_out}),
+    .wr_data_array({module_out2,module_out}),
     .cs(cs),
     .addr_en(addr_en),
     .rd_en(rd_en),
     .wr_en(wr_en),
-    .reset_n(reset)
+    .rst_n(reset)
     );
 
 
@@ -107,6 +107,7 @@ end
 
   
     // 写操作测试
+    // 写入后，读取的数据应是后者
     task mcu_write(input [17:0] addr,input [15:0]data);
     begin
         #5;
@@ -142,12 +143,15 @@ end
         // 保持时间
         #3;
         ad_dir =0;
+        wait(rd_en)
         $display("---------->[data]:%h",module_in);
         #8;
  
     end
     endtask
 
+// 读操作测试
+// 前面输入的是地址，后者是模块写入的数据，读取出的结果应是后者
     task mcu_read(input [17:0] addr,input [15:0]module_data);
     begin
         #5;
