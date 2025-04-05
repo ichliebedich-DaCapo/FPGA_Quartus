@@ -145,7 +145,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 always_ff@(posedge clk)begin
-    period <= avg_period;        // 输出平均周期
     stable <= (stable_cnt == STABLE_CYCLES);
+    period <= stable? avg_period:'0;        // 输出平均周期
 end
 endmodule

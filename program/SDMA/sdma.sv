@@ -18,6 +18,7 @@ module sdma(
     output [1:0] gain_ctrl,     // 增益控制
     output       adc_clk,       // ADC时钟，需要输出到高速ADC中
     output       ADC_OE         // ADC输出使能（低电平有效）
+    
 );
 
 // ---------FSMC接口信号---------
