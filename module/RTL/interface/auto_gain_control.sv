@@ -25,7 +25,7 @@ typedef struct {
     logic [11:0] upper; // 对应区间的上限ADC值
 } gain_limit_t;
 
-// 增益上下限查找表
+// 增益上下限查找表 应是峰峰值
 localparam gain_limit_t GAIN_LIMITS[4] = '{
     // [291.666667,600mV] →3x →[875mV,1800mV]
     GAIN_3: '{lower: 12'd1791, upper: 12'd3685},  // 对应于3x增益

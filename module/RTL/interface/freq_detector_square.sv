@@ -11,7 +11,7 @@
 //              δ = 3.125% →  f'比例误差:-3.0%~3.2%         THRESH_SHIFT = 5
 module freq_detector_square #(
     parameter STABLE_CYCLES = 4,// 连续稳定计数器，也就是说连续STABLE_CYCLES次，周期都在误差范围允许内
-    parameter THRESH_SHIFT = 5, // 阈值=周期值>>5 → 3.125%
+    parameter THRESH_SHIFT = 4, // 阈值=周期值>>5 → 3.125%
     parameter COUNTER_WIDTH  = 18     // 根据200MHz/1kHz=200_000计算（2^18=262,144）
 )(
     input               clk,    
