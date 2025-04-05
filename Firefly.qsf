@@ -38,7 +38,7 @@
 
 set_global_assignment -name FAMILY "Cyclone IV E"
 set_global_assignment -name DEVICE EP4CE6E22C8
-set_global_assignment -name TOP_LEVEL_ENTITY auto_gain_control
+set_global_assignment -name TOP_LEVEL_ENTITY sdma
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 18.0.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "16:02:24  DECEMBER 28, 2024"
 set_global_assignment -name LAST_QUARTUS_VERSION "18.0.0 Standard Edition"

@@ -1,6 +1,6 @@
 // 【简介】自动增益程控
 // 【Fmax】：210MHz
-// 【note】：548个周期，进行一次稳定判断。过压保护大概在215个周期响应。
+// 【note】：548个周期，进行一次稳定判断。
 module auto_gain_control (
     input        adc_clk,     // ADC采样时钟（200MHz+）
     input        rst_n,       // 异步复位
@@ -75,7 +75,7 @@ always_comb begin
                 next_state = WAIT_STABLE;
             end
         end
-        default:  next_state = IDLE;
+        default:next_state = IDLE;
     endcase
 end
 

@@ -106,7 +106,6 @@ wave_information wave_info(
 
 // --------增益程控模块--------
 auto_gain_control auto_gain_ctrl(
-    .clk(clk_200),
     .adc_clk(adc_clk),
     .rst_n(sync_rst_n),
     .adc_data(sync_adc_data),
